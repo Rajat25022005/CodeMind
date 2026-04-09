@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import { useApp } from '../context/AppContext';
 import GraphTabBar from './graph/GraphTabBar';
 import GraphToolbar from './graph/GraphToolbar';
 import GraphSVG from './graph/GraphSVG';
@@ -12,14 +14,21 @@ import './GraphCanvas.css';
  * toolbar, legend, tooltip, and timeline overlays.
  */
 const GraphCanvas = () => {
+  const { selectedNodeId, setSelectedNodeId } = useApp();
+  const [activeTab, setActiveTab] = useState('knowledge-graph');
+
+  const handleNodeClick = (id: string) => {
+    setSelectedNodeId(selectedNodeId === id ? null : id);
+  };
+
   return (
     <>
-      <GraphTabBar />
+      <GraphTabBar activeTab={activeTab} onTabChange={setActiveTab} />
       <div className="graphArea" id="graph-canvas">
         <GraphToolbar />
-        <GraphSVG />
+        <GraphSVG activeNodeId={selectedNodeId} onNodeClick={handleNodeClick} />
         <GraphLegend />
-        <NodeTooltip />
+        <NodeTooltip nodeId={selectedNodeId} />
         <TimelineStrip />
       </div>
     </>

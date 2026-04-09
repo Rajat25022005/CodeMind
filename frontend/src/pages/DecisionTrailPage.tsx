@@ -1,16 +1,14 @@
 import { useState, useCallback } from 'react';
 import { mockMessages, mockAIResponses } from '../data/mockData';
 import type { Message } from '../types';
-import MessageBubble from './panel/MessageBubble';
-import QueryInput from './panel/QueryInput';
-import './QueryPanel.css';
+import MessageBubble from '../components/panel/MessageBubble';
+import QueryInput from '../components/panel/QueryInput';
+import './Pages.css';
 
 /**
- * QueryPanel
- * Right panel "Decision Trail" Q&A interface with message history,
- * citations, reasoning traces, and live message sending.
+ * DecisionTrailPage — Full-width Q&A view optimized for deep querying.
  */
-const QueryPanel = () => {
+const DecisionTrailPage = () => {
   const [messages, setMessages] = useState<Message[]>(mockMessages);
   const [isThinking, setIsThinking] = useState(false);
 
@@ -24,7 +22,7 @@ const QueryPanel = () => {
     setMessages((prev) => [...prev, userMsg]);
     setIsThinking(true);
 
-    // Simulate AI response
+    // Simulate AI response after delay
     setTimeout(() => {
       const aiContent = mockAIResponses[Math.floor(Math.random() * mockAIResponses.length)];
       const aiMsg: Message = {
@@ -41,35 +39,39 @@ const QueryPanel = () => {
       };
       setMessages((prev) => [...prev, aiMsg]);
       setIsThinking(false);
-    }, 1000 + Math.random() * 800);
+    }, 1200 + Math.random() * 800);
   }, []);
 
   const handleClear = () => setMessages([]);
 
   return (
-    <aside className="rightPanel" id="query-panel">
-      <div className="rpHeader">
+    <div className="pageContainer">
+      <div className="pageHeader" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <div className="rpTitle">Decision Trail</div>
-          <div className="rpSub">Multi-hop reasoning · Ollama llama3</div>
+          <div className="pageTitle">Decision Trail</div>
+          <div className="pageSubtitle">Multi-hop reasoning · Ollama llama3 · Full-width mode</div>
         </div>
-        <div className="rpHeaderActions">
-          <button className="rpNavIcon" title="Clear chat" onClick={handleClear}>🗑</button>
-          <button className="rpNavIcon" title="Export">↗</button>
-        </div>
+        <button
+          className="filterBtn"
+          onClick={handleClear}
+          style={{ padding: '6px 14px', fontSize: '11px' }}
+        >
+          🗑 Clear
+        </button>
       </div>
 
-      <div className="rpMessages">
+      <div className="dtMessages">
         {messages.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '40px 16px', color: 'var(--muted)', fontFamily: 'var(--font-mono)', fontSize: '11px' }}>
-            <div style={{ fontSize: '28px', marginBottom: '12px', opacity: 0.4 }}>💬</div>
-            Ask about any decision, function, or module
+          <div className="emptyState">
+            <div className="emptyIcon">💬</div>
+            <div className="emptyTitle">No messages yet</div>
+            <div className="emptyDesc">Ask about any decision, architecture choice, or code evolution.</div>
           </div>
         ) : (
           messages.map((msg) => <MessageBubble key={msg.id} message={msg} />)
         )}
         {isThinking && (
-          <div className="msg msgAi" style={{ animation: 'appear 0.25s ease forwards' }}>
+          <div className="msg msgAi">
             <div className="msgBubble" style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--muted)' }}>
               ● Reasoning<span className="streamCursor" />
             </div>
@@ -77,9 +79,11 @@ const QueryPanel = () => {
         )}
       </div>
 
-      <QueryInput onSend={handleSend} />
-    </aside>
+      <div className="dtInputArea">
+        <QueryInput onSend={handleSend} />
+      </div>
+    </div>
   );
 };
 
-export default QueryPanel;
+export default DecisionTrailPage;

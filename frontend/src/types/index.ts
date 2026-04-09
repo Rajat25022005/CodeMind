@@ -73,10 +73,69 @@ export interface SidebarItem {
   icon: string;
   title: string;
   id: string;
+  /** Route path for navigation */
+  path: string;
 }
 
 export interface Tab {
   label: string;
   color: string;
   id: string;
+}
+
+/* ── New Page Types ── */
+
+export interface CommitItem {
+  hash: string;
+  message: string;
+  author: string;
+  date: string;
+  filesChanged: number;
+  graphNodes: number;
+}
+
+export interface FileItem {
+  path: string;
+  language: string;
+  lines: number;
+  lastModified: string;
+  connections: number;
+  isDir: boolean;
+  children?: FileItem[];
+}
+
+export interface DiffHunk {
+  file: string;
+  language: string;
+  removed: string[];
+  added: string[];
+}
+
+export interface DiffData {
+  commitHash: string;
+  message: string;
+  author: string;
+  date: string;
+  filesChanged: number;
+  hunks: DiffHunk[];
+}
+
+export interface OnboardingStep {
+  date: string;
+  title: string;
+  description: string;
+  type: 'create' | 'refactor' | 'fix' | 'feature';
+  commit?: string;
+  pr?: string;
+}
+
+export interface FullTimelineEvent {
+  id: string;
+  title: string;
+  description: string;
+  date: string;
+  type: 'commit' | 'pr' | 'drift' | 'release';
+  color: string;
+  bgColor: string;
+  hash?: string;
 }

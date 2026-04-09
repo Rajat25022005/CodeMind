@@ -1,24 +1,20 @@
-import { useState } from 'react';
+import { Outlet } from 'react-router-dom';
+import { useApp } from '../../context/AppContext';
 import TopBar from './TopBar';
 import Sidebar from './Sidebar';
 import BottomStrip from './BottomStrip';
-import GraphCanvas from '../GraphCanvas';
-import QueryPanel from '../QueryPanel';
 import DriftAlerts from '../DriftAlerts';
 import './WorkspaceLayout.css';
 
 const WorkspaceLayout = () => {
-  const [driftOpen, setDriftOpen] = useState(false);
+  const { driftOpen, setDriftOpen } = useApp();
 
   return (
     <>
       <TopBar />
       <div className="workspace">
-        <Sidebar onToggleDrift={() => setDriftOpen((prev) => !prev)} />
-        <div className="mainArea">
-          <GraphCanvas />
-        </div>
-        <QueryPanel />
+        <Sidebar />
+        <Outlet />
         {driftOpen && <DriftAlerts onClose={() => setDriftOpen(false)} />}
       </div>
       <BottomStrip />

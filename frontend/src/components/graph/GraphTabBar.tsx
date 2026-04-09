@@ -1,19 +1,21 @@
-import { useState } from 'react';
 import { graphTabs } from '../../data/mockData';
 import './GraphTabBar.css';
 
-const GraphTabBar = () => {
-  const [activeTabId, setActiveTabId] = useState('knowledge-graph');
+interface GraphTabBarProps {
+  activeTab: string;
+  onTabChange: (tabId: string) => void;
+}
 
+const GraphTabBar = ({ activeTab, onTabChange }: GraphTabBarProps) => {
   return (
     <div className="tabbar" role="tablist">
       {graphTabs.map((tab) => (
         <button
           key={tab.id}
-          className={`tab ${activeTabId === tab.id ? 'active' : ''}`}
+          className={`tab ${activeTab === tab.id ? 'active' : ''}`}
           role="tab"
-          aria-selected={activeTabId === tab.id}
-          onClick={() => setActiveTabId(tab.id)}
+          aria-selected={activeTab === tab.id}
+          onClick={() => onTabChange(tab.id)}
         >
           <span className="tabDot" style={{ background: tab.color }} />
           {tab.label}

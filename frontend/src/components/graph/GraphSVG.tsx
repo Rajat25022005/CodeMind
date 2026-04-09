@@ -2,9 +2,12 @@ import { useRef, useEffect, useCallback } from 'react';
 import { graphNodes, graphEdges, nodeColors, edgeColors } from '../../data/mockData';
 import './GraphSVG.css';
 
-const ACTIVE_NODE_ID = 'auth_mid';
+interface GraphSVGProps {
+  activeNodeId: string | null;
+  onNodeClick: (id: string) => void;
+}
 
-const GraphSVG = () => {
+const GraphSVG = ({ activeNodeId, onNodeClick }: GraphSVGProps) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -41,8 +44,18 @@ const GraphSVG = () => {
     });
     svg.appendChild(defs);
 
+    // Find edges connected to active node
+    const activeEdges = new Set<number>();
+    if (activeNodeId) {
+      graphEdges.forEach((e, idx) => {
+        if (e.from === activeNodeId || e.to === activeNodeId) {
+          activeEdges.add(idx);
+        }
+      });
+    }
+
     // Draw edges
-    graphEdges.forEach((e) => {
+    graphEdges.forEach((e, idx) => {
       const fromNode = graphNodes.find((n) => n.id === e.from);
       const toNode = graphNodes.find((n) => n.id === e.to);
       if (!fromNode || !toNode) return;
@@ -54,14 +67,18 @@ const GraphSVG = () => {
       const mx = (fx + tx) / 2;
       const my = (fy + ty) / 2 - 30;
 
-      const color = edgeColors[e.type] || 'rgba(255,255,255,0.1)';
+      const isHighlighted = activeEdges.has(idx);
+      const baseColor = edgeColors[e.type] || 'rgba(255,255,255,0.1)';
+      const color = isHighlighted
+        ? baseColor.replace(/[\d.]+\)$/, '0.7)')
+        : baseColor;
 
       // Curved edge path
       const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
       path.setAttribute('d', `M${fx},${fy} Q${mx},${my} ${tx},${ty}`);
       path.setAttribute('fill', 'none');
       path.setAttribute('stroke', color);
-      path.setAttribute('stroke-width', '1.5');
+      path.setAttribute('stroke-width', isHighlighted ? '2.5' : '1.5');
       path.setAttribute('class', 'animatedEdge');
       svg.appendChild(path);
 
@@ -88,19 +105,36 @@ const GraphSVG = () => {
       const py = n.y * H;
       const col = nodeColors[n.type] || '#fff';
       const r = n.type === 'module' ? 12 : n.type === 'commit' ? 8 : 10;
-      const isActive = n.id === ACTIVE_NODE_ID;
+      const isActive = n.id === activeNodeId;
+
+      // Group for hover effect
+      const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      group.style.cursor = 'pointer';
+      group.addEventListener('click', () => onNodeClick(n.id));
+
+      // Hover highlight circle (invisible until hovered)
+      const hoverRing = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      hoverRing.setAttribute('cx', String(px));
+      hoverRing.setAttribute('cy', String(py));
+      hoverRing.setAttribute('r', String(r + 6));
+      hoverRing.setAttribute('fill', 'none');
+      hoverRing.setAttribute('stroke', col);
+      hoverRing.setAttribute('stroke-width', '1');
+      hoverRing.setAttribute('opacity', '0');
+      hoverRing.style.transition = 'opacity 0.2s';
+      group.appendChild(hoverRing);
+
+      group.addEventListener('mouseenter', () => {
+        hoverRing.setAttribute('opacity', '0.2');
+      });
+      group.addEventListener('mouseleave', () => {
+        hoverRing.setAttribute('opacity', isActive ? '0.25' : '0');
+      });
 
       // Outer glow ring for active node
       if (isActive) {
-        const ring = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-        ring.setAttribute('cx', String(px));
-        ring.setAttribute('cy', String(py));
-        ring.setAttribute('r', String(r + 8));
-        ring.setAttribute('fill', 'none');
-        ring.setAttribute('stroke', col);
-        ring.setAttribute('stroke-width', '1');
-        ring.setAttribute('opacity', '0.25');
-        svg.appendChild(ring);
+        hoverRing.setAttribute('opacity', '0.25');
+        hoverRing.setAttribute('r', String(r + 8));
       }
 
       // Node circle
@@ -114,8 +148,7 @@ const GraphSVG = () => {
       if (isActive) {
         circle.setAttribute('filter', `url(#glow_${n.id})`);
       }
-      circle.style.cursor = 'pointer';
-      svg.appendChild(circle);
+      group.appendChild(circle);
 
       // Label text
       const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
@@ -126,9 +159,11 @@ const GraphSVG = () => {
       text.setAttribute('font-size', '9');
       text.setAttribute('fill', isActive ? col : 'rgba(160,170,185,0.75)');
       text.textContent = n.label;
-      svg.appendChild(text);
+      group.appendChild(text);
+
+      svg.appendChild(group);
     });
-  }, []);
+  }, [activeNodeId, onNodeClick]);
 
   useEffect(() => {
     drawGraph();
