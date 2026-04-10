@@ -1,28 +1,60 @@
-import { nodeTooltipData, graphNodes } from '../../data/mockData';
+import { useRef, useEffect, useState } from 'react';
+import { nodeTooltipData, graphNodes } from '../../data/graph.mock';
 import './NodeTooltip.css';
 
 interface NodeTooltipProps {
   nodeId: string | null;
 }
 
+/**
+ * NodeTooltip — Dynamically positioned tooltip that clamps to graph bounds
+ * using getBoundingClientRect instead of hardcoded percentages.
+ */
 const NodeTooltip = ({ nodeId }: NodeTooltipProps) => {
-  if (!nodeId) return null;
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState({ left: 0, top: 0 });
 
+  useEffect(() => {
+    if (!nodeId || !tooltipRef.current) return;
+
+    const node = graphNodes.find((n) => n.id === nodeId);
+    if (!node) return;
+
+    const parent = tooltipRef.current.parentElement;
+    if (!parent) return;
+
+    const parentRect = parent.getBoundingClientRect();
+    const tooltipRect = tooltipRef.current.getBoundingClientRect();
+
+    // Calculate initial position (offset to the right of the node)
+    let left = node.x * parentRect.width + 20;
+    let top = node.y * parentRect.height - 40;
+
+    // Clamp right edge
+    if (left + tooltipRect.width > parentRect.width - 8) {
+      left = node.x * parentRect.width - tooltipRect.width - 20;
+    }
+    // Clamp left edge
+    if (left < 8) left = 8;
+    // Clamp bottom edge
+    if (top + tooltipRect.height > parentRect.height - 8) {
+      top = parentRect.height - tooltipRect.height - 8;
+    }
+    // Clamp top edge
+    if (top < 8) top = 8;
+
+    setPos({ left, top });
+  }, [nodeId]);
+
+  if (!nodeId) return null;
   const data = nodeTooltipData[nodeId];
   if (!data) return null;
 
-  // Position tooltip near the node
-  const node = graphNodes.find((n) => n.id === nodeId);
-  if (!node) return null;
-
-  // Calculate position offset — place tooltip to the right of node
-  const leftPct = Math.min(node.x * 100 + 5, 65);
-  const topPct = Math.max(node.y * 100 - 10, 5);
-
   return (
     <div
+      ref={tooltipRef}
       className="nodeTooltip"
-      style={{ left: `${leftPct}%`, top: `${topPct}%` }}
+      style={{ left: `${pos.left}px`, top: `${pos.top}px` }}
     >
       <div className="ntHeader">
         <div className="ntIcon">{data.icon}</div>

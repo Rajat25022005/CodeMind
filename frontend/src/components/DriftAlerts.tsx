@@ -1,4 +1,5 @@
-import { mockDriftItems } from '../data/mockData';
+import DOMPurify from 'dompurify';
+import { mockDriftItems } from '../data/drift.mock';
 import './DriftAlerts.css';
 
 interface DriftAlertsProps {
@@ -29,7 +30,7 @@ const DriftAlerts = ({ onClose }: DriftAlertsProps) => {
             <div className="diFile">{item.file}</div>
             <div className="diTime">{item.timeAgo}</div>
           </div>
-          <div className="diMsg" dangerouslySetInnerHTML={{ __html: item.message }} />
+          <div className="diMsg" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(item.message) }} />
           <span className="diBadge">{item.severity}</span>
         </div>
       ))}

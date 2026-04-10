@@ -1,4 +1,4 @@
-import { mockFiles } from '../data/mockData';
+import { mockFiles } from '../data/repo.mock';
 import './Pages.css';
 
 /**

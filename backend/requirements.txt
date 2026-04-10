@@ -1,10 +1,27 @@
-fastapi>=0.111.0
-uvicorn[standard]>=0.29.0
-neo4j>=5.19.0
-qdrant-client>=1.9.0
-gitpython>=3.1.43
-tree-sitter>=0.22.0
-langchain>=0.2.0
-langgraph>=0.0.30
-httpx>=0.27.0
-python-dotenv>=1.0.1
+
+# ── Web Framework ──
+fastapi>=0.111.0            # Async REST API + WebSocket framework
+uvicorn[standard]>=0.29.0   # ASGI server to run FastAPI
+python-multipart>=0.0.9     # Required by FastAPI for form/file uploads
+pydantic-settings>=2.0.0    # Typed settings from .env files
+
+# ── Databases ──
+neo4j>=5.19.0               # Neo4j async driver — temporal knowledge graph
+qdrant-client>=1.9.0        # Qdrant vector store client — similarity search
+
+# ── LLM & AI ──
+langchain>=0.2.0            # LLM orchestration framework
+langgraph>=0.0.30           # Stateful multi-step agent workflows
+httpx>=0.27.0               # Async HTTP client — Ollama REST API calls
+
+# ── LLM Providers (optional cloud fallback) ──
+openai>=1.0.0               # OpenAI API — GPT fallback when Ollama is down
+google-generativeai>=0.5.0  # Google Gemini API — secondary cloud fallback
+
+# ── Code Analysis ──
+gitpython>=3.1.43           # Git repo access — walk commits, diffs, branches
+tree-sitter>=0.22.0         # AST parser — extract functions, classes, imports
+
+# ── Utilities ──
+python-dotenv>=1.0.1        # Load .env file into environment variables
+eval-type-backport>=0.2.0   # Python 3.9 compat for X | Y type syntax in Pydantic

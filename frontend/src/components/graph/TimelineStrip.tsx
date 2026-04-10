@@ -1,4 +1,4 @@
-import { mockTimelineItems } from '../../data/mockData';
+import { mockTimelineItems } from '../../data/timeline.mock';
 import './TimelineStrip.css';
 
 const TimelineStrip = () => {

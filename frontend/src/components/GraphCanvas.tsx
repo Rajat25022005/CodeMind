@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { useApp } from '../context/AppContext';
+import { useGraphStore } from '../stores/graphStore';
 import GraphTabBar from './graph/GraphTabBar';
 import GraphToolbar from './graph/GraphToolbar';
 import GraphSVG from './graph/GraphSVG';
 import GraphLegend from './graph/GraphLegend';
 import NodeTooltip from './graph/NodeTooltip';
 import TimelineStrip from './graph/TimelineStrip';
+import ErrorBoundary from './ErrorBoundary';
 import './GraphCanvas.css';
 
 /**
@@ -14,19 +15,18 @@ import './GraphCanvas.css';
  * toolbar, legend, tooltip, and timeline overlays.
  */
 const GraphCanvas = () => {
-  const { selectedNodeId, setSelectedNodeId } = useApp();
+  const selectedNodeId = useGraphStore((s) => s.selectedNodeId);
+  const toggleNodeSelection = useGraphStore((s) => s.toggleNodeSelection);
   const [activeTab, setActiveTab] = useState('knowledge-graph');
-
-  const handleNodeClick = (id: string) => {
-    setSelectedNodeId(selectedNodeId === id ? null : id);
-  };
 
   return (
     <>
       <GraphTabBar activeTab={activeTab} onTabChange={setActiveTab} />
       <div className="graphArea" id="graph-canvas">
         <GraphToolbar />
-        <GraphSVG activeNodeId={selectedNodeId} onNodeClick={handleNodeClick} />
+        <ErrorBoundary>
+          <GraphSVG activeNodeId={selectedNodeId} onNodeClick={toggleNodeSelection} />
+        </ErrorBoundary>
         <GraphLegend />
         <NodeTooltip nodeId={selectedNodeId} />
         <TimelineStrip />

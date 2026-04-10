@@ -1,4 +1,4 @@
-import { mockOnboardingSteps } from '../data/mockData';
+import { mockOnboardingSteps } from '../data/repo.mock';
 import './Pages.css';
 
 const typeColors: Record<string, { color: string; bg: string }> = {

@@ -1,3 +1,4 @@
+import DOMPurify from 'dompurify';
 import type { Message } from '../../types';
 import CitationBlock from './CitationBlock';
 import TraceBar from './TraceBar';
@@ -13,7 +14,7 @@ const MessageBubble = ({ message }: MessageBubbleProps) => {
   return (
     <div className={`msg ${isUser ? 'msgUser' : 'msgAi'}`}>
       <div className="msgBubble">
-        <span dangerouslySetInnerHTML={{ __html: message.content }} />
+        <span dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(message.content) }} />
         {message.isStreaming && <span className="streamCursor" />}
         {message.citations && <CitationBlock citations={message.citations} />}
         {message.traceSteps && <TraceBar steps={message.traceSteps} />}

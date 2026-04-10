@@ -1,4 +1,4 @@
-import { mockDiffs } from '../data/mockData';
+import { mockDiffs } from '../data/repo.mock';
 import './Pages.css';
 
 /**

@@ -1,12 +1,13 @@
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useApp } from '../../context/AppContext';
-import { sidebarItems, sidebarSecondary, mockDriftItems } from '../../data/mockData';
+import { useUIStore } from '../../stores/uiStore';
+import { sidebarItems, sidebarSecondary } from '../../data/repo.mock';
+import { mockDriftItems } from '../../data/drift.mock';
 import './Sidebar.css';
 
 const Sidebar = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { toggleDrift } = useApp();
+  const toggleDrift = useUIStore((s) => s.toggleDrift);
 
   const isActive = (path: string) => location.pathname === path;
 

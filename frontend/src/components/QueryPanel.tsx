@@ -1,6 +1,4 @@
-import { useState, useCallback } from 'react';
-import { mockMessages, mockAIResponses } from '../data/mockData';
-import type { Message } from '../types';
+import { useQueryStream } from '../hooks/useQueryStream';
 import MessageBubble from './panel/MessageBubble';
 import QueryInput from './panel/QueryInput';
 import './QueryPanel.css';
@@ -11,40 +9,7 @@ import './QueryPanel.css';
  * citations, reasoning traces, and live message sending.
  */
 const QueryPanel = () => {
-  const [messages, setMessages] = useState<Message[]>(mockMessages);
-  const [isThinking, setIsThinking] = useState(false);
-
-  const handleSend = useCallback((text: string) => {
-    const userMsg: Message = {
-      id: `msg-${Date.now()}`,
-      role: 'user',
-      content: text,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    };
-    setMessages((prev) => [...prev, userMsg]);
-    setIsThinking(true);
-
-    // Simulate AI response
-    setTimeout(() => {
-      const aiContent = mockAIResponses[Math.floor(Math.random() * mockAIResponses.length)];
-      const aiMsg: Message = {
-        id: `msg-${Date.now()}-ai`,
-        role: 'ai',
-        content: aiContent,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        hops: Math.floor(Math.random() * 4) + 1,
-        traceSteps: [
-          { label: 'Graph walk', done: true },
-          { label: 'Retrieval', done: true },
-          { label: 'Synthesize', done: true },
-        ],
-      };
-      setMessages((prev) => [...prev, aiMsg]);
-      setIsThinking(false);
-    }, 1000 + Math.random() * 800);
-  }, []);
-
-  const handleClear = () => setMessages([]);
+  const { messages, isStreaming, sendQuery, clear } = useQueryStream();
 
   return (
     <aside className="rightPanel" id="query-panel">
@@ -54,7 +19,7 @@ const QueryPanel = () => {
           <div className="rpSub">Multi-hop reasoning · Ollama llama3</div>
         </div>
         <div className="rpHeaderActions">
-          <button className="rpNavIcon" title="Clear chat" onClick={handleClear}>🗑</button>
+          <button className="rpNavIcon" title="Clear chat" onClick={clear}>🗑</button>
           <button className="rpNavIcon" title="Export">↗</button>
         </div>
       </div>
@@ -68,7 +33,7 @@ const QueryPanel = () => {
         ) : (
           messages.map((msg) => <MessageBubble key={msg.id} message={msg} />)
         )}
-        {isThinking && (
+        {isStreaming && (
           <div className="msg msgAi" style={{ animation: 'appear 0.25s ease forwards' }}>
             <div className="msgBubble" style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--muted)' }}>
               ● Reasoning<span className="streamCursor" />
@@ -77,7 +42,7 @@ const QueryPanel = () => {
         )}
       </div>
 
-      <QueryInput onSend={handleSend} />
+      <QueryInput onSend={sendQuery} />
     </aside>
   );
 };

@@ -1,11 +1,11 @@
 import { useNavigate } from 'react-router-dom';
-import { useApp } from '../../context/AppContext';
-import { mockDriftItems } from '../../data/mockData';
+import { useUIStore } from '../../stores/uiStore';
+import { mockDriftItems } from '../../data/drift.mock';
 import './TopBar.css';
 
 const TopBar = () => {
   const navigate = useNavigate();
-  const { toggleDrift } = useApp();
+  const toggleDrift = useUIStore((s) => s.toggleDrift);
 
   return (
     <header className="topbar">

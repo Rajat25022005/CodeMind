@@ -1,4 +1,4 @@
-import { mockStats } from '../../data/mockData';
+import { mockStats } from '../../data/repo.mock';
 import './BottomStrip.css';
 
 const BottomStrip = () => {

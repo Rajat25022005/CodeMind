@@ -6,6 +6,15 @@
 }
 
 .animatedEdge {
-  stroke-dasharray: 4 4;
+  stroke-dasharray: 0.008 0.008;
   animation: flow-edge 1.2s linear infinite;
+}
+
+/* Declarative hover ring: show on parent g:hover */
+.nodeHoverRing {
+  transition: opacity 0.2s;
+}
+
+g:hover > .nodeHoverRing {
+  opacity: 0.2 !important;
 }

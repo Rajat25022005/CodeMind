@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { mockFullTimeline } from '../data/mockData';
+import { mockFullTimeline } from '../data/timeline.mock';
 import './Pages.css';
 
 const filterTypes = ['All', 'Commits', 'PRs', 'Drifts', 'Releases'];

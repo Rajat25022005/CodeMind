@@ -1,7 +1,6 @@
 .nodeTooltip {
   position: absolute;
-  top: 22%;
-  left: 58%;
+  /* top/left set via inline style from pixel-clamped calculation */
   background: var(--bg1);
   border: 1px solid rgba(0, 212, 255, 0.3);
   border-radius: 12px;
