@@ -9,6 +9,7 @@
  * a running backend.
  */
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { useAuthStore } from '../stores/authStore';
 import { mockMessages, mockAIResponses } from '../data/messages.mock';
 import type { Message, TraceStep } from '../types';
 
@@ -23,7 +24,9 @@ interface QueryStreamReturn {
 /** Resolve the WebSocket URL relative to the current page. */
 function getWsUrl(): string {
   const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
-  return `${proto}://${window.location.host}/ws/query`;
+  const token = useAuthStore.getState().token;
+  const query = token ? `?token=${token}` : '';
+  return `${proto}://${window.location.host}/ws/query${query}`;
 }
 
 export function useQueryStream(initialMessages?: Message[]): QueryStreamReturn {

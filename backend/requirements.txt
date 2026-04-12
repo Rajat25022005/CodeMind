@@ -32,3 +32,7 @@ tree-sitter>=0.22.0         # AST parser — extract functions, classes, imports
 # ── Utilities ──
 python-dotenv>=1.0.1        # Load .env file into environment variables
 eval-type-backport>=0.2.0   # Python 3.9 compat for X | Y type syntax in Pydantic
+
+# ── Testing ──
+pytest>=8.0.0               # Testing framework
+pytest-asyncio>=0.23.0      # Asyncio support for pytest
