@@ -60,8 +60,8 @@ class GraphResponse(BaseModel):
 # ── Ingestion ──
 
 class IngestRequest(BaseModel):
-    repo_path: str
-    branch: str = "main"
+    repo_path: str = Field(..., max_length=500)
+    branch: str = Field("main", max_length=100)
     max_commits: int | None = None
 
 
@@ -88,9 +88,9 @@ class ChunkRecord(BaseModel):
 # ── Query ──
 
 class QueryRequest(BaseModel):
-    question: str
-    max_hops: int = 3
-    top_k: int = 10
+    question: str = Field(..., max_length=2000)
+    max_hops: int = Field(3, ge=1, le=10)
+    top_k: int = Field(10, ge=1, le=100)
 
 
 class Citation(BaseModel):
@@ -139,7 +139,7 @@ class DriftResponse(BaseModel):
 # ── Onboarding ──
 
 class OnboardingRequest(BaseModel):
-    module_path: str
+    module_path: str = Field(..., max_length=500)
 
 
 class OnboardingStep(BaseModel):

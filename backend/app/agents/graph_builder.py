@@ -10,6 +10,9 @@ Simultaneously embeds chunks into Qdrant for vector search.
 from __future__ import annotations
 
 import logging
+import json
+import re
+import asyncio
 from typing import Any
 
 from app.core.graph_db import GraphDB
@@ -60,29 +63,38 @@ class GraphBuilderAgent:
         edges_created = 0
         vectors_upserted = 0
 
+        node_batch = []
+        edge_batch = []
+
         # Pass 1: Create nodes from structured chunk metadata
         for chunk in chunks:
             try:
                 if chunk.chunk_type == "commit_message":
-                    await self._process_commit_chunk(chunk)
-                    nodes_created += 1
+                    self._collect_commit_chunk(chunk, node_batch)
                 elif chunk.chunk_type == "code":
-                    n = await self._process_code_chunk(chunk)
-                    nodes_created += n
+                    self._collect_code_chunk(chunk, node_batch, edge_batch)
                 elif chunk.chunk_type == "diff":
-                    await self._process_diff_chunk(chunk)
-                    edges_created += 1
+                    self._collect_diff_chunk(chunk, node_batch, edge_batch)
             except Exception as e:
                 logger.warning("Error processing chunk %s: %s", chunk.id, e)
 
+        if node_batch:
+            nodes_created += await self.graph_db.bulk_create_nodes(node_batch)
+        if edge_batch:
+            edges_created += await self.graph_db.bulk_create_edges(edge_batch)
+
         # Pass 2: LLM-based relationship extraction for code chunks
+        llm_edges = []
         code_chunks = [c for c in chunks if c.chunk_type == "code" and c.content]
         for chunk in code_chunks[:100]:  # Limit to prevent excessive LLM calls
             try:
-                e = await self._extract_relationships(chunk)
-                edges_created += e
+                new_edges = await self._extract_relationships(chunk)
+                llm_edges.extend(new_edges)
             except Exception as e:
                 logger.debug("Relationship extraction failed for %s: %s", chunk.id, e)
+
+        if llm_edges:
+            edges_created += await self.graph_db.bulk_create_edges(llm_edges)
 
         # Pass 3: Embed all chunks into Qdrant
         vectors_upserted = await self._embed_chunks(chunks)
@@ -99,38 +111,35 @@ class GraphBuilderAgent:
             "vectors_upserted": vectors_upserted,
         }
 
-    async def _process_commit_chunk(self, chunk: ChunkRecord) -> None:
-        """Create a commit node in the graph."""
-        await self.graph_db.create_node(
-            node_id=chunk.id,
-            label=chunk.commit_hash[:7],
-            node_type=NodeType.COMMIT,
-            properties={
+    def _collect_commit_chunk(self, chunk: ChunkRecord, node_batch: list) -> None:
+        """Collect a commit node for bulk graph insertion."""
+        node_batch.append({
+            "id": chunk.id,
+            "label": chunk.commit_hash[:7],
+            "type": NodeType.COMMIT.value,
+            "properties": {
                 "message": chunk.commit_message,
                 "author": chunk.author,
                 "timestamp": chunk.timestamp,
                 "files_changed": chunk.metadata.get("files_changed", 0),
-            },
-        )
+            }
+        })
 
-    async def _process_code_chunk(self, chunk: ChunkRecord) -> int:
-        """Create file and entity nodes from a code chunk."""
-        count = 0
-
+    def _collect_code_chunk(self, chunk: ChunkRecord, node_batch: list, edge_batch: list) -> None:
+        """Collect file and entity nodes/edges from a code chunk for bulk insertion."""
         # File node
         if chunk.source_file:
             file_id = f"file_{chunk.source_file.replace('/', '_').replace('.', '_')}"
-            await self.graph_db.create_node(
-                node_id=file_id,
-                label=chunk.source_file,
-                node_type=NodeType.FILE,
-                properties={
+            node_batch.append({
+                "id": file_id,
+                "label": chunk.source_file,
+                "type": NodeType.FILE.value,
+                "properties": {
                     "language": chunk.metadata.get("language", ""),
                     "lines": chunk.metadata.get("lines", 0),
                     "path": chunk.source_file,
-                },
-            )
-            count += 1
+                }
+            })
 
         # Entity nodes (functions, classes)
         entities = chunk.metadata.get("entities", [])
@@ -143,57 +152,54 @@ class GraphBuilderAgent:
             ent_id = f"{ent_type}_{chunk.source_file}_{ent_name}".replace("/", "_").replace(".", "_")
             node_type = NodeType.FUNCTION if ent_type in ("function", "class") else NodeType.MODULE
 
-            await self.graph_db.create_node(
-                node_id=ent_id,
-                label=ent_name,
-                node_type=node_type,
-                properties={
+            node_batch.append({
+                "id": ent_id,
+                "label": ent_name,
+                "type": node_type.value,
+                "properties": {
                     "source_file": chunk.source_file,
                     "line": entity.get("line", 0),
                     "entity_type": ent_type,
-                },
-            )
-            count += 1
+                }
+            })
 
             # Edge: entity belongs to file
             if chunk.source_file:
                 file_id = f"file_{chunk.source_file.replace('/', '_').replace('.', '_')}"
-                await self.graph_db.create_edge(
-                    from_id=ent_id,
-                    to_id=file_id,
-                    edge_type=EdgeType.DEPENDS,
-                    properties={"relationship": "defined_in"},
-                )
+                edge_batch.append({
+                    "from_id": ent_id,
+                    "to_id": file_id,
+                    "type": EdgeType.DEPENDS.value,
+                    "properties": {"relationship": "defined_in"},
+                })
 
-        return count
-
-    async def _process_diff_chunk(self, chunk: ChunkRecord) -> None:
-        """Create edges linking commits to the files they modified."""
+    def _collect_diff_chunk(self, chunk: ChunkRecord, node_batch: list, edge_batch: list) -> None:
+        """Collect edges linking commits to the files they modified for bulk insertion."""
         if chunk.commit_hash and chunk.source_file:
             commit_id = f"commit_{chunk.commit_hash[:7]}"
             file_id = f"file_{chunk.source_file.replace('/', '_').replace('.', '_')}"
 
             # Ensure file node exists
-            await self.graph_db.create_node(
-                node_id=file_id,
-                label=chunk.source_file,
-                node_type=NodeType.FILE,
-                properties={"path": chunk.source_file},
-            )
+            node_batch.append({
+                "id": file_id,
+                "label": chunk.source_file,
+                "type": NodeType.FILE.value,
+                "properties": {"path": chunk.source_file},
+            })
 
-            await self.graph_db.create_edge(
-                from_id=commit_id,
-                to_id=file_id,
-                edge_type=EdgeType.INTRODUCED,
-                properties={
+            edge_batch.append({
+                "from_id": commit_id,
+                "to_id": file_id,
+                "type": EdgeType.INTRODUCED.value,
+                "properties": {
                     "message": chunk.commit_message,
                     "author": chunk.author,
-                },
-            )
+                }
+            })
 
-    async def _extract_relationships(self, chunk: ChunkRecord) -> int:
+    async def _extract_relationships(self, chunk: ChunkRecord) -> list:
         """Use LLM to extract semantic relationships from a code chunk."""
-        import json
+        # Remove inline imports
 
         prompt = f"""Analyze this code chunk and extract entities and relationships:
 
@@ -205,13 +211,15 @@ Content:
 
         try:
             response = await self.llm.generate(prompt, system_prompt=EXTRACTION_PROMPT)
-            # Parse JSON response
-            data = json.loads(response.strip())
+            # Resilient JSON parsing
+            match = re.search(r'\{.*\}', response.strip(), re.DOTALL)
+            json_str = match.group(0) if match else response.strip()
+            data = json.loads(json_str)
         except (json.JSONDecodeError, Exception) as e:
             logger.debug("LLM extraction parse error: %s", e)
-            return 0
+            return []
 
-        edge_count = 0
+        rel_batch = []
         relationships = data.get("relationships", [])
         for rel in relationships:
             source = rel.get("source", "")
@@ -229,50 +237,48 @@ Content:
             source_id = f"entity_{source.replace('/', '_').replace('.', '_')}"
             target_id = f"entity_{target.replace('/', '_').replace('.', '_')}"
 
-            await self.graph_db.create_edge(
-                from_id=source_id,
-                to_id=target_id,
-                edge_type=etype,
-                properties={"extracted_by": "llm"},
-            )
-            edge_count += 1
-
-        return edge_count
-
-    async def _embed_chunks(self, chunks: list[ChunkRecord]) -> int:
-        """Embed all chunks and upsert into Qdrant."""
-        batch: list[dict[str, Any]] = []
-
-        for chunk in chunks:
-            if not chunk.content.strip():
-                continue
-
-            try:
-                vector = await self.llm.embed(chunk.content[:1000])
-            except Exception as e:
-                logger.debug("Embedding failed for chunk %s: %s", chunk.id, e)
-                continue
-
-            batch.append({
-                "id": chunk.id,
-                "vector": vector,
-                "payload": {
-                    "content": chunk.content[:2000],
-                    "source_file": chunk.source_file,
-                    "commit_hash": chunk.commit_hash,
-                    "chunk_type": chunk.chunk_type,
-                    "author": chunk.author,
-                    "timestamp": chunk.timestamp,
-                },
+            rel_batch.append({
+                "from_id": source_id,
+                "to_id": target_id,
+                "type": etype.value,
+                "properties": {"extracted_by": "llm"},
             })
 
-            # Batch upsert every 50 points
-            if len(batch) >= 50:
-                await self.vector_db.upsert_batch(batch)
-                batch = []
+        return rel_batch
 
-        # Flush remaining
-        if batch:
+    async def _embed_chunks(self, chunks: list[ChunkRecord]) -> int:
+        """Embed all chunks and upsert into Qdrant in parallel."""
+        sem = asyncio.Semaphore(10)  # Max 10 concurrent embeddings
+        
+        async def embed_one(chunk: ChunkRecord):
+            async with sem:
+                try:
+                    if not chunk.content.strip():
+                        return None
+                    vector = await self.llm.embed(chunk.content[:1000])
+                    payload = {
+                        "content": chunk.content[:2000],
+                        "source_file": chunk.source_file,
+                        "commit_hash": chunk.commit_hash,
+                        "chunk_type": chunk.chunk_type,
+                        "author": chunk.author,
+                        "timestamp": chunk.timestamp,
+                    }
+                    return {"id": chunk.id, "vector": vector, "payload": payload}
+                except Exception as e:
+                    logger.error(f"Failed to embed chunk {chunk.id}: {e}")
+                    return None
+
+        tasks = [embed_one(c) for c in chunks if c.content.strip()]
+        results = await asyncio.gather(*tasks)
+        valid_points = [r for r in results if r is not None]
+
+        inserted = 0
+        batch_size = 50
+        for i in range(0, len(valid_points), batch_size):
+            batch = valid_points[i:i + batch_size]
             await self.vector_db.upsert_batch(batch)
+            inserted += len(batch)
 
-        return sum(1 for c in chunks if c.content.strip())
+        logger.info(f"Embedded and stored {inserted}/{len(chunks)} chunks in Vector DB")
+        return inserted

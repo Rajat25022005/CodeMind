@@ -21,12 +21,9 @@ interface QueryStreamReturn {
   clear: () => void;
 }
 
-/** Resolve the WebSocket URL relative to the current page. */
 function getWsUrl(): string {
   const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
-  const token = useAuthStore.getState().token;
-  const query = token ? `?token=${token}` : '';
-  return `${proto}://${window.location.host}/ws/query${query}`;
+  return `${proto}://${window.location.host}/ws/query`;
 }
 
 export function useQueryStream(initialMessages?: Message[]): QueryStreamReturn {
@@ -46,6 +43,10 @@ export function useQueryStream(initialMessages?: Message[]): QueryStreamReturn {
       const ws = new WebSocket(getWsUrl());
 
       ws.onopen = () => {
+        const token = useAuthStore.getState().token;
+        if (token) {
+          ws.send(JSON.stringify({ type: 'auth', token }));
+        }
         setConnected(true);
         console.info('[WS] Connected to query stream');
       };

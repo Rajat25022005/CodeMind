@@ -28,7 +28,14 @@ class LLMClient:
     async def connect(self) -> None:
         """Verify Ollama is reachable."""
         settings = get_settings()
-        self._http = httpx.AsyncClient(timeout=120.0)
+        self._http = httpx.AsyncClient(
+            timeout=120.0,
+            limits=httpx.Limits(
+                max_connections=50,
+                max_keepalive_connections=10,
+                keepalive_expiry=30,
+            ),
+        )
         try:
             resp = await self._http.get(f"{settings.ollama_base_url}/api/tags")
             resp.raise_for_status()
@@ -127,7 +134,8 @@ class LLMClient:
         full_prompt = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
 
         resp = await self._http.post(
-            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={settings.gemini_api_key}",
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+            headers={"x-goog-api-key": settings.gemini_api_key},
             json={"contents": [{"parts": [{"text": full_prompt}]}]},
         )
         resp.raise_for_status()

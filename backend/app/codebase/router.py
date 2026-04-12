@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import logging
 import uuid
+from pathlib import Path
+import time
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Depends
 
@@ -61,6 +63,26 @@ def _get_agents():
         "synthesis": SynthesisAgent(_graph_db, _llm),
     }
 
+ALLOWED_BASE_DIRS = ["/repos", "/workspace", "/Users", "/tmp"]  # Adjust as needed (added /Users for local mac)
+
+def _validate_repo_path(repo_path: str) -> str:
+    resolved = Path(repo_path).resolve()
+    if not any(str(resolved).startswith(base) for base in ALLOWED_BASE_DIRS):
+        raise HTTPException(400, "Repository path not in allowed directories")
+    return str(resolved)
+
+_drift_cache = {"count": 0, "updated_at": 0}
+
+async def _get_cached_drift_count() -> int:
+    if time.time() - _drift_cache["updated_at"] > 300:  # 5 min cache
+        try:
+            agents = _get_agents()
+            alerts = await agents["synthesis"].detect_drift()
+            _drift_cache["count"] = len(alerts)
+            _drift_cache["updated_at"] = time.time()
+        except Exception:
+            pass
+    return _drift_cache["count"]
 
 # ── Ingestion ──
 
@@ -95,8 +117,10 @@ async def ingest_repository(
     Runs as a background task — returns immediately with a task ID.
     """
     task_id = str(uuid.uuid4())[:8]
+    safe_path = _validate_repo_path(request.repo_path)
+    
     background_tasks.add_task(
-        _run_ingestion, request.repo_path, request.branch, request.max_commits
+        _run_ingestion, safe_path, request.branch, request.max_commits
     )
 
     return IngestResponse(
@@ -133,13 +157,51 @@ async def query_codebase(request: QueryRequest, user: dict = Depends(get_current
 # ── Graph ──
 
 @router.get("/graph", response_model=GraphResponse)
-async def get_graph(user: dict = Depends(get_current_user)):
-    """Return the full knowledge graph for visualization."""
+async def get_graph(skip: int = 0, limit: int = 500, user: dict = Depends(get_current_user)):
+    """Return a paginated portion of the knowledge graph for visualization."""
     if not _graph_db or not _graph_db.connected:
         raise HTTPException(503, "Graph database not available")
 
-    data = await _graph_db.get_graph()
-    return GraphResponse(nodes=data["nodes"], edges=data["edges"])
+    # Pass limit and skip down, but we need to modify get_graph or just limit here for now
+    # Since get_graph returns full graph, for now we will query it directly with pagination
+    records = await _graph_db.query(
+        "MATCH (n:Entity) RETURN n SKIP $skip LIMIT $limit",
+        {"skip": skip, "limit": limit}
+    )
+    from app.codebase.schemas import GraphNode, NodeType
+    nodes = []
+    for r in records:
+        data = dict(r["n"])
+        nodes.append(GraphNode(
+            id=data["id"],
+            label=data.get("label", ""),
+            type=NodeType(data.get("type", "module")),
+            properties={k: v for k, v in data.items() if k not in ("id", "label", "type")},
+        ))
+    
+    edges = []
+    if nodes:
+        node_ids = [n.id for n in nodes]
+        edge_records = await _graph_db.query(
+            "MATCH (a:Entity)-[r]->(b:Entity) WHERE a.id IN $ids AND b.id IN $ids "
+            "RETURN a.id AS from_id, b.id AS to_id, type(r) AS rel_type, properties(r) AS props",
+            {"ids": node_ids}
+        )
+        from app.codebase.schemas import GraphEdge, EdgeType
+        for record in edge_records:
+            rel = record["rel_type"].lower()
+            try:
+                etype = EdgeType(rel)
+            except ValueError:
+                etype = EdgeType.DEPENDS
+            edges.append(GraphEdge(
+                from_id=record["from_id"],
+                to_id=record["to_id"],
+                type=etype,
+                properties=record["props"] or {},
+            ))
+
+    return GraphResponse(nodes=nodes, edges=edges)
 
 
 @router.get("/graph/{node_id}")
@@ -292,12 +354,7 @@ async def get_status(user: dict = Depends(get_current_user)):
 
     drift_count = 0
     if _graph_db and _graph_db.connected and _llm:
-        try:
-            agents = _get_agents()
-            alerts = await agents["synthesis"].detect_drift()
-            drift_count = len(alerts)
-        except Exception:
-            pass
+        drift_count = await _get_cached_drift_count()
 
     return StatusResponse(
         nodes=stats.get("nodes", 0),

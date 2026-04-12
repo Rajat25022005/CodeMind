@@ -10,10 +10,12 @@ import os
 
 PWD_CONTEXT = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# Use a secure secret key in production from environment.
-SECRET_KEY = os.getenv("SECRET_KEY", "09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7")
+# Use a secure secret key from environment. Fails securely if missing.
+SECRET_KEY = os.getenv("SECRET_KEY", "")
+if not SECRET_KEY or len(SECRET_KEY) < 32:
+    raise ValueError("CRITICAL: SECRET_KEY environment variable is missing or too short (must be >= 32 chars)!")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
+ACCESS_TOKEN_EXPIRE_MINUTES = 60  # 1 hour
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 

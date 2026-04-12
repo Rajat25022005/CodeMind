@@ -1,17 +1,18 @@
 """
 Authentication Business Logic.
 """
-import random
+import secrets
 import string
 from fastapi import HTTPException, status
+import time
 from app.core.security import get_password_hash, verify_password, create_access_token
 from app.core.mail import send_verification_email
 from app.core.graph_db import GraphDB
 
 
 def generate_verification_code() -> str:
-    """Generate a random 6-digit string."""
-    return "".join(random.choices(string.digits, k=6))
+    """Generate a secure random 6-digit string."""
+    return "".join(secrets.choice(string.digits) for _ in range(6))
 
 
 class AuthService:
@@ -40,6 +41,17 @@ class AuthService:
             raise HTTPException(status_code=404, detail="User not found")
         if user.get("is_verified"):
             raise HTTPException(status_code=400, detail="User already verified")
+            
+        attempts = user.get("verification_attempts", 0)
+        if attempts >= 5:
+            raise HTTPException(status_code=429, detail="Too many attempts. Request a new code.")
+            
+        created_at = user.get("created_at", 0)
+        if time.time() * 1000 - created_at > 15 * 60 * 1000:
+            raise HTTPException(status_code=400, detail="Code expired. Request a new one.")
+            
+        await self.db.increment_verification_attempts(email)
+        
         if user.get("verification_code") != code:
             raise HTTPException(status_code=400, detail="Invalid verification code")
 

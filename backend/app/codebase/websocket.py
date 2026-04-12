@@ -8,6 +8,7 @@ and push notifications for drift alerts and ingestion progress.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 
@@ -41,12 +42,10 @@ class ConnectionManager:
         self.graph_connections: list[WebSocket] = []
 
     async def connect_query(self, websocket: WebSocket) -> None:
-        await websocket.accept()
         self.query_connections.append(websocket)
         logger.info("Query WS connected (%d total)", len(self.query_connections))
 
     async def connect_graph(self, websocket: WebSocket) -> None:
-        await websocket.accept()
         self.graph_connections.append(websocket)
         logger.info("Graph WS connected (%d total)", len(self.graph_connections))
 
@@ -77,17 +76,25 @@ manager = ConnectionManager()
 
 
 @router.websocket("/ws/query")
-async def query_stream(websocket: WebSocket, token: str | None = None):
+async def query_stream(websocket: WebSocket):
     """
     WebSocket endpoint for streaming Q&A responses.
-
-    Client sends: {"question": "...", "top_k": 10}
-    Server streams back:
-      {"type": "trace_step", "content": "Planning..."}
-      {"type": "token", "content": "The"}
-      {"type": "token", "content": " answer"}
-      {"type": "done", "content": "", "metadata": {"hops": 3}}
+    Auth should be sent as the first message.
     """
+    await websocket.accept()
+    
+    try:
+        raw_auth = await asyncio.wait_for(websocket.receive_text(), timeout=10)
+        auth_data = json.loads(raw_auth)
+        if auth_data.get("type") != "auth" or not auth_data.get("token"):
+            await websocket.close(code=4001, reason="Auth required")
+            return
+        token = auth_data["token"]
+        extract_user_from_token(token)
+    except Exception:
+        await websocket.close(code=4003, reason="Invalid token or auth timeout")
+        return
+
     await manager.connect_query(websocket)
 
     try:
@@ -105,17 +112,6 @@ async def query_stream(websocket: WebSocket, token: str | None = None):
                 continue
 
             top_k = data.get("top_k", 10)
-
-            # Verify authentication
-            if not token:
-                await websocket.send_json({"type": "error", "content": "Authentication token missing"})
-                continue
-                
-            try:
-                extract_user_from_token(token)
-            except Exception:
-                await websocket.send_json({"type": "error", "content": "Invalid or expired token"})
-                continue
 
             # Check if services are available
             if not _llm or not _llm.available:
@@ -168,14 +164,22 @@ async def query_stream(websocket: WebSocket, token: str | None = None):
 async def graph_updates(websocket: WebSocket):
     """
     WebSocket endpoint for real-time graph update notifications.
-    Used during ingestion to push progress updates to the frontend.
-
-    Server pushes:
-      {"type": "node_added", "data": {...}}
-      {"type": "edge_added", "data": {...}}
-      {"type": "ingestion_progress", "progress": 0.5}
-      {"type": "ingestion_complete"}
+    Auth should be sent as the first message.
     """
+    await websocket.accept()
+
+    try:
+        raw_auth = await asyncio.wait_for(websocket.receive_text(), timeout=10)
+        auth_data = json.loads(raw_auth)
+        if auth_data.get("type") != "auth" or not auth_data.get("token"):
+            await websocket.close(code=4001, reason="Auth required")
+            return
+        token = auth_data["token"]
+        extract_user_from_token(token)
+    except Exception:
+        await websocket.close(code=4003, reason="Invalid token or auth timeout")
+        return
+
     await manager.connect_graph(websocket)
 
     try:

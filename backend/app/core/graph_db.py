@@ -80,6 +80,8 @@ class GraphDB:
                 properties={k: v for k, v in node_data.items() if k not in ("id", "label", "type")},
             )
 
+    VALID_REL_TYPES = frozenset(e.value.upper() for e in EdgeType)
+
     async def create_edge(
         self,
         from_id: str,
@@ -90,6 +92,8 @@ class GraphDB:
         """Create a relationship between two nodes."""
         props = properties or {}
         rel_type = edge_type.value.upper()
+        if rel_type not in self.VALID_REL_TYPES:
+            raise ValueError(f"Invalid relationship type: {rel_type}")
 
         query = f"""
         MATCH (a:Entity {{id: $from_id}})
@@ -99,6 +103,42 @@ class GraphDB:
         """
         async with self._driver.session() as session:
             await session.run(query, from_id=from_id, to_id=to_id, props=props)
+
+    async def bulk_create_nodes(self, nodes: list[dict[str, Any]]) -> int:
+        """Create or merge numerous nodes in a bulk UNWIND transaction."""
+        if not nodes:
+            return 0
+        query = """
+        UNWIND $batch AS process
+        MERGE (n:Entity {id: process.id})
+        SET n += coalesce(process.properties, {}), n.label = process.label, n.type = process.type, n.updated_at = timestamp()
+        """
+        async with self._driver.session() as session:
+            await session.run(query, batch=nodes)
+        return len(nodes)
+
+    async def bulk_create_edges(self, edges: list[dict[str, Any]]) -> int:
+        """Create numerous relationships grouped by type."""
+        if not edges:
+            return 0
+        grouped = {}
+        for e in edges:
+            rel = e["type"].value.upper() if hasattr(e["type"], "value") else str(e["type"]).upper()
+            if rel not in grouped:
+                grouped[rel] = []
+            grouped[rel].append(e)
+
+        async with self._driver.session() as session:
+            for rel_type, batch in grouped.items():
+                query = f"""
+                UNWIND $batch AS process
+                MATCH (a:Entity {{id: process.from_id}})
+                MATCH (b:Entity {{id: process.to_id}})
+                MERGE (a)-[r:{rel_type}]->(b)
+                SET r += coalesce(process.properties, {{}}), r.updated_at = timestamp()
+                """
+                await session.run(query, batch=batch)
+        return len(edges)
 
     async def get_node(self, node_id: str) -> GraphNode | None:
         """Get a single node by ID."""
@@ -159,8 +199,11 @@ class GraphDB:
         self, node_id: str, depth: int = 2
     ) -> dict[str, list]:
         """Get a node and its neighbors up to `depth` hops."""
+        # Security: Strictly bound integer variable against injection natively
+        safe_depth = max(1, min(int(depth), 5)) 
+
         query = f"""
-        MATCH path = (start:Entity {{id: $id}})-[*1..{depth}]-(neighbor:Entity)
+        MATCH path = (start:Entity {{id: $id}})-[*1..{safe_depth}]-(neighbor:Entity)
         WITH nodes(path) AS ns, relationships(path) AS rs
         UNWIND ns AS n
         WITH COLLECT(DISTINCT n) AS all_nodes, rs
@@ -220,22 +263,20 @@ class GraphDB:
 
     async def get_stats(self) -> dict:
         """Get graph statistics."""
+        query = """
+        MATCH (n:Entity) WITH count(n) AS nodes
+        OPTIONAL MATCH ()-[r]->() WITH nodes, count(r) AS edges
+        OPTIONAL MATCH (c:Entity {type: 'commit'}) 
+        RETURN nodes, edges, count(c) AS commits
+        """
         async with self._driver.session() as session:
-            node_result = await session.run("MATCH (n:Entity) RETURN count(n) AS cnt")
-            node_record = await node_result.single()
-            node_count = node_record["cnt"] if node_record else 0
-
-            edge_result = await session.run("MATCH ()-[r]->() RETURN count(r) AS cnt")
-            edge_record = await edge_result.single()
-            edge_count = edge_record["cnt"] if edge_record else 0
-
-            commit_result = await session.run(
-                "MATCH (n:Entity {type: 'commit'}) RETURN count(n) AS cnt"
-            )
-            commit_record = await commit_result.single()
-            commit_count = commit_record["cnt"] if commit_record else 0
-
-        return {"nodes": node_count, "edges": edge_count, "commits": commit_count}
+            result = await session.run(query)
+            record = await result.single()
+            return {
+                "nodes": record["nodes"] if record else 0,
+                "edges": record["edges"] if record else 0,
+                "commits": record["commits"] if record else 0,
+            }
 
     async def query(self, cypher: str, params: dict | None = None) -> list[dict]:
         """Execute a raw Cypher query and return results as dicts."""
@@ -286,3 +327,12 @@ class GraphDB:
             result = await session.run(query, email=email)
             record = await result.single()
             return bool(record)
+
+    async def increment_verification_attempts(self, email: str) -> None:
+        """Increment verification attempts for an unverified user."""
+        query = """
+        MATCH (u:User {email: $email})
+        SET u.verification_attempts = coalesce(u.verification_attempts, 0) + 1
+        """
+        async with self._driver.session() as session:
+            await session.run(query, email=email)

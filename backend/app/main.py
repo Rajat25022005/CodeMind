@@ -12,6 +12,7 @@ Lifecycle:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -52,18 +53,32 @@ async def lifespan(app: FastAPI):
 
     logger.info("CodeMind API starting up...")
 
-    # Connect Neo4j
-    try:
-        await graph_db.connect()
-    except Exception as e:
-        logger.warning("Neo4j unavailable — graph features disabled: %s", e)
+    # Connect Neo4j (with exponential backoff)
+    for attempt in range(3):
+        try:
+            await graph_db.connect()
+            break
+        except Exception as e:
+            if attempt < 2:
+                wait = 2 ** attempt
+                logger.warning("Neo4j connection attempt %d failed, retrying in %ds: %s", attempt + 1, wait, e)
+                await asyncio.sleep(wait)
+            else:
+                logger.warning("Neo4j unavailable after 3 attempts — graph features disabled: %s", e)
 
-    # Connect Qdrant
-    try:
-        await vector_db.connect()
-        await vector_db.ensure_collection()
-    except Exception as e:
-        logger.warning("Qdrant unavailable — vector search disabled: %s", e)
+    # Connect Qdrant (with exponential backoff)
+    for attempt in range(3):
+        try:
+            await vector_db.connect()
+            await vector_db.ensure_collection()
+            break
+        except Exception as e:
+            if attempt < 2:
+                wait = 2 ** attempt
+                logger.warning("Qdrant connection attempt %d failed, retrying in %ds: %s", attempt + 1, wait, e)
+                await asyncio.sleep(wait)
+            else:
+                logger.warning("Qdrant unavailable after 3 attempts — vector search disabled: %s", e)
 
     # Connect Ollama / LLM
     try:
@@ -122,11 +137,5 @@ app.include_router(ws_router)
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint with service status."""
-    return {
-        "status": "ok",
-        "service": "codemind-api",
-        "neo4j": graph_db.connected,
-        "qdrant": vector_db.connected,
-        "ollama": llm.available,
-    }
+    """Health check endpoint — returns status without leaking component internals."""
+    return {"status": "ok"}

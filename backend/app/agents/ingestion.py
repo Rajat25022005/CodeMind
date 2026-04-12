@@ -45,9 +45,15 @@ class IngestionAgent:
         """
         logger.info("Starting ingestion for %s (branch=%s)", self.repo_path, branch)
 
-        if not os.path.isdir(self.repo_path):
-            raise FileNotFoundError(f"Repository not found: {self.repo_path}")
+        self.repo_path = Path(self.repo_path).resolve()
+        
+        ALLOWED_BASE_DIRS = ["/repos", "/workspace", "/Users", "/tmp"]
+        if not any(str(self.repo_path).startswith(base) for base in ALLOWED_BASE_DIRS):
+            raise ValueError("Repository path not in allowed directories")
 
+        if not self.repo_path.is_dir():
+            raise FileNotFoundError(f"Repository not found at {self.repo_path}")
+            
         self.repo = Repo(self.repo_path)
         if self.repo.bare:
             raise ValueError(f"Repository is bare: {self.repo_path}")
@@ -123,7 +129,7 @@ class IngestionAgent:
                                 diff_text = diff_text[:5000] + "\n... [truncated]"
 
                             file_path = diff.b_path or diff.a_path or "unknown"
-                            diff_id = f"diff_{commit.hexsha[:7]}_{hashlib.md5(file_path.encode()).hexdigest()[:6]}"
+                            diff_id = f"diff_{commit.hexsha[:7]}_{hashlib.sha256(file_path.encode()).hexdigest()[:6]}"
 
                             chunks.append(ChunkRecord(
                                 id=diff_id,
@@ -168,7 +174,7 @@ class IngestionAgent:
                 entities = self._extract_entities(content, ext)
 
                 # File-level chunk
-                file_id = f"file_{hashlib.md5(rel_path.encode()).hexdigest()[:10]}"
+                file_id = f"file_{hashlib.sha256(rel_path.encode()).hexdigest()[:10]}"
                 lines = content.count("\n") + 1
 
                 chunks.append(ChunkRecord(
@@ -186,7 +192,7 @@ class IngestionAgent:
                 # Per-entity chunks for fine-grained search
                 for entity in entities:
                     ent_name = entity["name"]
-                    ent_id = f"entity_{hashlib.md5(f'{rel_path}:{ent_name}'.encode()).hexdigest()[:10]}"
+                    ent_id = f"entity_{hashlib.sha256(f'{rel_path}:{ent_name}'.encode()).hexdigest()[:10]}"
                     chunks.append(ChunkRecord(
                         id=ent_id,
                         content=entity.get("body", entity["name"]),
