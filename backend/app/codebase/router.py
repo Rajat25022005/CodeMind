@@ -10,18 +10,31 @@ from __future__ import annotations
 
 import logging
 import uuid
-from pathlib import Path
 import time
+from pathlib import Path
+
+import asyncio
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Depends
 
+from app.config import get_settings
 from app.core.security import get_current_user
+from app.agents.ingestion import IngestionAgent
+from app.agents.graph_builder import GraphBuilderAgent
+from app.agents.retrieval import RetrievalAgent
+from app.agents.reasoning import ReasoningAgent
+from app.agents.synthesis import SynthesisAgent
+from app.codebase.websocket import notify_graph_update
 from app.codebase.schemas import (
     IngestRequest,
     IngestResponse,
     QueryRequest,
     QueryResponse,
     GraphResponse,
+    GraphNode,
+    GraphEdge,
+    NodeType,
+    EdgeType,
     DriftResponse,
     OnboardingRequest,
     OnboardingResponse,
@@ -48,20 +61,15 @@ def set_clients(graph_db, vector_db, llm):
     _llm = llm
 
 
-def _get_agents():
-    """Lazy-construct agents from shared clients."""
-    from app.agents.ingestion import IngestionAgent
-    from app.agents.graph_builder import GraphBuilderAgent
-    from app.agents.retrieval import RetrievalAgent
-    from app.agents.reasoning import ReasoningAgent
-    from app.agents.synthesis import SynthesisAgent
-
+def _get_agents() -> dict:
+    """Construct agents from shared clients."""
     return {
         "graph_builder": GraphBuilderAgent(_graph_db, _vector_db, _llm),
         "retrieval": RetrievalAgent(_graph_db, _vector_db, _llm),
         "reasoning": ReasoningAgent(_llm),
         "synthesis": SynthesisAgent(_graph_db, _llm),
     }
+
 
 ALLOWED_BASE_DIRS = ["/repos", "/workspace", "/Users", "/tmp"]  # Adjust as needed (added /Users for local mac)
 
@@ -71,7 +79,7 @@ def _validate_repo_path(repo_path: str) -> str:
         raise HTTPException(400, "Repository path not in allowed directories")
     return str(resolved)
 
-_drift_cache = {"count": 0, "updated_at": 0}
+_drift_cache: dict[str, int | float] = {"count": 0, "updated_at": 0}
 
 async def _get_cached_drift_count() -> int:
     if time.time() - _drift_cache["updated_at"] > 300:  # 5 min cache
@@ -82,28 +90,38 @@ async def _get_cached_drift_count() -> int:
             _drift_cache["updated_at"] = time.time()
         except Exception:
             pass
-    return _drift_cache["count"]
+    return int(_drift_cache["count"])
 
 # ── Ingestion ──
 
 async def _run_ingestion(repo_path: str, branch: str, max_commits: int | None):
     """Background task: run the full ingestion + graph build pipeline."""
-    from app.agents.ingestion import IngestionAgent
-    from app.agents.graph_builder import GraphBuilderAgent
-
     try:
         logger.info("Background ingestion started for %s", repo_path)
+        await notify_graph_update("ingestion_progress", {"progress": 0.0, "stage": "starting"})
+
         agent = IngestionAgent(repo_path)
         result = await agent.ingest(max_commits=max_commits, branch=branch)
+
+        await notify_graph_update("ingestion_progress", {
+            "progress": 0.4, "stage": "ingestion_complete",
+            "total_chunks": result.get("total_chunks", 0),
+        })
 
         chunks = result.get("chunks", [])
         if chunks and _graph_db and _vector_db and _llm:
             builder = GraphBuilderAgent(_graph_db, _vector_db, _llm)
+            await notify_graph_update("ingestion_progress", {"progress": 0.5, "stage": "building_graph"})
             await builder.build_graph(chunks)
 
+        await notify_graph_update("ingestion_complete", {
+            "repo_path": repo_path,
+            "total_chunks": result.get("total_chunks", 0),
+        })
         logger.info("Background ingestion completed for %s", repo_path)
     except Exception as e:
         logger.error("Background ingestion failed: %s", e, exc_info=True)
+        await notify_graph_update("ingestion_error", {"error": str(e)})
 
 
 @router.post("/ingest", response_model=IngestResponse)
@@ -162,13 +180,10 @@ async def get_graph(skip: int = 0, limit: int = 500, user: dict = Depends(get_cu
     if not _graph_db or not _graph_db.connected:
         raise HTTPException(503, "Graph database not available")
 
-    # Pass limit and skip down, but we need to modify get_graph or just limit here for now
-    # Since get_graph returns full graph, for now we will query it directly with pagination
     records = await _graph_db.query(
         "MATCH (n:Entity) RETURN n SKIP $skip LIMIT $limit",
         {"skip": skip, "limit": limit}
     )
-    from app.codebase.schemas import GraphNode, NodeType
     nodes = []
     for r in records:
         data = dict(r["n"])
@@ -187,7 +202,6 @@ async def get_graph(skip: int = 0, limit: int = 500, user: dict = Depends(get_cu
             "RETURN a.id AS from_id, b.id AS to_id, type(r) AS rel_type, properties(r) AS props",
             {"ids": node_ids}
         )
-        from app.codebase.schemas import GraphEdge, EdgeType
         for record in edge_records:
             rel = record["rel_type"].lower()
             try:
@@ -204,7 +218,7 @@ async def get_graph(skip: int = 0, limit: int = 500, user: dict = Depends(get_cu
     return GraphResponse(nodes=nodes, edges=edges)
 
 
-@router.get("/graph/{node_id}")
+@router.get("/graph/{node_id}", response_model=GraphResponse)
 async def get_node_neighbors(node_id: str, depth: int = 2, user: dict = Depends(get_current_user)):
     """Get a node and its neighbors."""
     if not _graph_db or not _graph_db.connected:
@@ -334,6 +348,37 @@ async def get_commits(limit: int = 50, user: dict = Depends(get_current_user)):
     }
 
 
+@router.get("/commits/{commit_hash}")
+async def get_commit_diff(commit_hash: str, user: dict = Depends(get_current_user)):
+    """Return diff data for a single commit by hash."""
+    if not _graph_db or not _graph_db.connected:
+        raise HTTPException(503, "Graph database not available")
+
+    # Get commit node from graph
+    records = await _graph_db.query(
+        "MATCH (c:Entity {type: 'commit'}) WHERE c.label CONTAINS $hash "
+        "OPTIONAL MATCH (c)-[r]->(f:Entity {type: 'file'}) "
+        "RETURN c.label AS hash, c.message AS message, c.author AS author, "
+        "c.timestamp AS date, collect(f.label) AS files",
+        {"hash": commit_hash},
+    )
+
+    if not records:
+        raise HTTPException(404, "Commit not found")
+
+    record = records[0]
+    files = [f for f in (record.get("files") or []) if f]
+
+    return {
+        "commitHash": record.get("hash", ""),
+        "message": record.get("message", ""),
+        "author": record.get("author", ""),
+        "date": record.get("date", ""),
+        "filesChanged": len(files),
+        "files": files,
+    }
+
+
 # ── Status ──
 
 @router.get("/status", response_model=StatusResponse)
@@ -349,7 +394,6 @@ async def get_status(user: dict = Depends(get_current_user)):
 
     model = ""
     if _llm and _llm.available:
-        from app.config import get_settings
         model = get_settings().ollama_model
 
     drift_count = 0

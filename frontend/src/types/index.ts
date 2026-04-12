@@ -1,6 +1,6 @@
 /* ── CodeMind Type Definitions ── */
 
-export type NodeType = 'module' | 'func' | 'commit' | 'pr' | 'drift';
+export type NodeType = 'module' | 'func' | 'commit' | 'pr' | 'drift' | 'file';
 
 export type EdgeType = 'depends' | 'introduced' | 'refactored';
 

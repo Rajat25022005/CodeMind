@@ -28,23 +28,32 @@ logger = logging.getLogger(__name__)
 class VectorDB:
     """Qdrant async client for CodeMind vector embeddings."""
 
+    __slots__ = ("_client", "_settings")
+
     def __init__(self) -> None:
         self._client: AsyncQdrantClient | None = None
+        self._settings = get_settings()
+
+    def _require_connection(self) -> AsyncQdrantClient:
+        """Return the client or raise if not connected."""
+        if self._client is None:
+            raise RuntimeError("Qdrant is not connected — call connect() first")
+        return self._client
 
     async def connect(self) -> None:
         """Establish connection to Qdrant."""
-        settings = get_settings()
+        self._settings = get_settings()
         try:
             self._client = AsyncQdrantClient(
-                host=settings.qdrant_host,
-                port=settings.qdrant_port,
+                host=self._settings.qdrant_host,
+                port=self._settings.qdrant_port,
             )
             # Verify by listing collections
             await self._client.get_collections()
             logger.info(
                 "Connected to Qdrant at %s:%s",
-                settings.qdrant_host,
-                settings.qdrant_port,
+                self._settings.qdrant_host,
+                self._settings.qdrant_port,
             )
         except Exception as e:
             logger.error("Failed to connect to Qdrant: %s", e)
@@ -68,15 +77,15 @@ class VectorDB:
         dimension: int | None = None,
     ) -> None:
         """Create collection if it doesn't exist."""
-        settings = get_settings()
-        coll_name = name or settings.collection_name
-        dim = dimension or settings.embed_dimension
+        client = self._require_connection()
+        coll_name = name or self._settings.collection_name
+        dim = dimension or self._settings.embed_dimension
 
-        collections = await self._client.get_collections()
+        collections = await client.get_collections()
         existing = [c.name for c in collections.collections]
 
         if coll_name not in existing:
-            await self._client.create_collection(
+            await client.create_collection(
                 collection_name=coll_name,
                 vectors_config=VectorParams(size=dim, distance=Distance.COSINE),
             )
@@ -92,11 +101,11 @@ class VectorDB:
         collection: str | None = None,
     ) -> str:
         """Insert or update a single point. Returns the point ID."""
-        settings = get_settings()
-        coll = collection or settings.collection_name
+        client = self._require_connection()
+        coll = collection or self._settings.collection_name
         pid = point_id or str(uuid.uuid4())
 
-        await self._client.upsert(
+        await client.upsert(
             collection_name=coll,
             points=[
                 PointStruct(id=pid, vector=vector, payload=payload),
@@ -113,8 +122,8 @@ class VectorDB:
         Batch upsert multiple points.
         Each dict should have keys: 'id', 'vector', 'payload'.
         """
-        settings = get_settings()
-        coll = collection or settings.collection_name
+        client = self._require_connection()
+        coll = collection or self._settings.collection_name
 
         structs = [
             PointStruct(
@@ -125,7 +134,7 @@ class VectorDB:
             for p in points
         ]
 
-        await self._client.upsert(collection_name=coll, points=structs)
+        await client.upsert(collection_name=coll, points=structs)
         logger.info("Upserted %d points into '%s'", len(structs), coll)
         return len(structs)
 
@@ -139,8 +148,8 @@ class VectorDB:
         """
         Similarity search. Returns list of dicts with 'id', 'score', 'payload'.
         """
-        settings = get_settings()
-        coll = collection or settings.collection_name
+        client = self._require_connection()
+        coll = collection or self._settings.collection_name
 
         # Build optional filter
         qfilter = None
@@ -151,7 +160,7 @@ class VectorDB:
             ]
             qfilter = Filter(must=conditions)
 
-        results = await self._client.search(
+        results = await client.search(
             collection_name=coll,
             query_vector=query_vector,
             limit=top_k,
@@ -169,17 +178,17 @@ class VectorDB:
 
     async def delete_collection(self, name: str | None = None) -> None:
         """Delete a collection."""
-        settings = get_settings()
-        coll = name or settings.collection_name
-        await self._client.delete_collection(collection_name=coll)
+        client = self._require_connection()
+        coll = name or self._settings.collection_name
+        await client.delete_collection(collection_name=coll)
         logger.info("Deleted Qdrant collection '%s'", coll)
 
     async def count(self, collection: str | None = None) -> int:
         """Return the number of points in a collection."""
-        settings = get_settings()
-        coll = collection or settings.collection_name
+        client = self._require_connection()
+        coll = collection or self._settings.collection_name
         try:
-            info = await self._client.get_collection(collection_name=coll)
+            info = await client.get_collection(collection_name=coll)
             return info.points_count or 0
         except Exception:
             return 0

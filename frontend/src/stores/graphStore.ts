@@ -11,7 +11,7 @@ interface GraphState {
 }
 
 export const useGraphStore = create<GraphState>((set, get) => ({
-  selectedNodeId: 'auth_mid',
+  selectedNodeId: null,
 
   setSelectedNodeId: (id) => set({ selectedNodeId: id }),
 

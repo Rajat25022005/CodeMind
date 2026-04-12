@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     """Application settings loaded from environment."""
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=("../.env", ".env"),
         env_file_encoding="utf-8",
         extra="ignore",
     )
@@ -35,7 +35,10 @@ class Settings(BaseSettings):
     # ── Cloud LLM fallback (optional) ──
     openai_api_key: str = ""
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.0-flash"
+    gemini_model: str = "gemini-3.1-flash-lite-preview"
+
+    # ── Security ──
+    secret_key: str = "change-me-in-production"
 
     # ── Application ──
     debug: bool = False

@@ -36,57 +36,6 @@ export function useQueryStream(initialMessages?: Message[]): QueryStreamReturn {
   const mockTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const streamingMsgId = useRef<string | null>(null);
 
-  // ── WebSocket lifecycle ──
-
-  const connect = useCallback(() => {
-    try {
-      const ws = new WebSocket(getWsUrl());
-
-      ws.onopen = () => {
-        const token = useAuthStore.getState().token;
-        if (token) {
-          ws.send(JSON.stringify({ type: 'auth', token }));
-        }
-        setConnected(true);
-        console.info('[WS] Connected to query stream');
-      };
-
-      ws.onclose = () => {
-        setConnected(false);
-        wsRef.current = null;
-        // Auto-reconnect after 3 s
-        reconnectTimer.current = setTimeout(connect, 3000);
-      };
-
-      ws.onerror = () => {
-        // onclose will fire next — no special handling needed
-      };
-
-      ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          handleServerMessage(data);
-        } catch {
-          console.warn('[WS] Non-JSON message received');
-        }
-      };
-
-      wsRef.current = ws;
-    } catch {
-      // WebSocket constructor can throw (e.g. bad URL) — fall back to mock
-      setConnected(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    connect();
-    return () => {
-      if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
-      if (mockTimer.current) clearTimeout(mockTimer.current);
-      wsRef.current?.close();
-    };
-  }, [connect]);
-
   // ── Server → Client message handler ──
 
   const handleServerMessage = useCallback((data: { type: string; content?: string; metadata?: Record<string, unknown> }) => {
@@ -156,6 +105,57 @@ export function useQueryStream(initialMessages?: Message[]): QueryStreamReturn {
       }
     }
   }, []);
+
+  // ── WebSocket lifecycle ──
+
+  const connect = useCallback(() => {
+    try {
+      const ws = new WebSocket(getWsUrl());
+
+      ws.onopen = () => {
+        const token = useAuthStore.getState().token;
+        if (token && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'auth', token }));
+        }
+        setConnected(true);
+        console.info('[WS] Connected to query stream');
+      };
+
+      ws.onclose = () => {
+        setConnected(false);
+        wsRef.current = null;
+        // Auto-reconnect after 3 s
+        reconnectTimer.current = setTimeout(connect, 3000);
+      };
+
+      ws.onerror = () => {
+        // onclose will fire next — no special handling needed
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          handleServerMessage(data);
+        } catch {
+          console.warn('[WS] Non-JSON message received');
+        }
+      };
+
+      wsRef.current = ws;
+    } catch {
+      // WebSocket constructor can throw (e.g. bad URL) — fall back to mock
+      setConnected(false);
+    }
+  }, [handleServerMessage]);
+
+  useEffect(() => {
+    connect();
+    return () => {
+      if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
+      if (mockTimer.current) clearTimeout(mockTimer.current);
+      wsRef.current?.close();
+    };
+  }, [connect]);
 
   // ── Send query ──
 

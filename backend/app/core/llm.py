@@ -8,6 +8,7 @@ Handles text generation, embedding, and streaming.
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import AsyncIterator
 
@@ -21,13 +22,22 @@ logger = logging.getLogger(__name__)
 class LLMClient:
     """Unified LLM client — Ollama-first with optional cloud fallback."""
 
+    __slots__ = ("_http", "_available", "_settings")
+
     def __init__(self) -> None:
         self._http: httpx.AsyncClient | None = None
         self._available: bool = False
+        self._settings = get_settings()
+
+    def _require_http(self) -> httpx.AsyncClient:
+        """Return the HTTP client or raise if not initialised."""
+        if self._http is None:
+            raise RuntimeError("LLM client not initialised — call connect() first")
+        return self._http
 
     async def connect(self) -> None:
         """Verify Ollama is reachable."""
-        settings = get_settings()
+        self._settings = get_settings()
         self._http = httpx.AsyncClient(
             timeout=120.0,
             limits=httpx.Limits(
@@ -37,7 +47,7 @@ class LLMClient:
             ),
         )
         try:
-            resp = await self._http.get(f"{settings.ollama_base_url}/api/tags")
+            resp = await self._http.get(f"{self._settings.ollama_base_url}/api/tags")
             resp.raise_for_status()
             models = [m["name"] for m in resp.json().get("models", [])]
             logger.info("Ollama available. Models: %s", models)
@@ -54,8 +64,7 @@ class LLMClient:
 
     @property
     def available(self) -> bool:
-        settings = get_settings()
-        return self._available or bool(settings.openai_api_key) or bool(settings.gemini_api_key)
+        return self._available or bool(self._settings.openai_api_key) or bool(self._settings.gemini_api_key)
 
     # ── Text Generation ──
 
@@ -66,26 +75,24 @@ class LLMClient:
         model: str | None = None,
     ) -> str:
         """Generate a text completion. Tries Ollama first, then cloud fallback."""
-        settings = get_settings()
-
         # Try Ollama
         if self._available:
             try:
                 return await self._generate_ollama(
-                    prompt, system_prompt, model or settings.ollama_model
+                    prompt, system_prompt, model or self._settings.ollama_model
                 )
             except Exception as e:
                 logger.warning("Ollama generation failed: %s", e)
 
         # Fallback: OpenAI
-        if settings.openai_api_key:
+        if self._settings.openai_api_key:
             try:
                 return await self._generate_openai(prompt, system_prompt)
             except Exception as e:
                 logger.warning("OpenAI fallback failed: %s", e)
 
         # Fallback: Gemini
-        if settings.gemini_api_key:
+        if self._settings.gemini_api_key:
             try:
                 return await self._generate_gemini(prompt, system_prompt)
             except Exception as e:
@@ -97,7 +104,7 @@ class LLMClient:
         self, prompt: str, system_prompt: str, model: str
     ) -> str:
         """Generate via Ollama REST API."""
-        settings = get_settings()
+        http = self._require_http()
         payload: dict = {
             "model": model,
             "prompt": prompt,
@@ -106,8 +113,8 @@ class LLMClient:
         if system_prompt:
             payload["system"] = system_prompt
 
-        resp = await self._http.post(
-            f"{settings.ollama_base_url}/api/generate",
+        resp = await http.post(
+            f"{self._settings.ollama_base_url}/api/generate",
             json=payload,
         )
         resp.raise_for_status()
@@ -115,15 +122,15 @@ class LLMClient:
 
     async def _generate_openai(self, prompt: str, system_prompt: str) -> str:
         """Generate via OpenAI API."""
-        settings = get_settings()
+        http = self._require_http()
         messages = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
 
-        resp = await self._http.post(
+        resp = await http.post(
             "https://api.openai.com/v1/chat/completions",
-            headers={"Authorization": f"Bearer {settings.openai_api_key}"},
+            headers={"Authorization": f"Bearer {self._settings.openai_api_key}"},
             json={"model": "gpt-4o-mini", "messages": messages},
         )
         resp.raise_for_status()
@@ -131,12 +138,12 @@ class LLMClient:
 
     async def _generate_gemini(self, prompt: str, system_prompt: str) -> str:
         """Generate via Google Gemini API."""
-        settings = get_settings()
+        http = self._require_http()
         full_prompt = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
 
-        resp = await self._http.post(
-            f"https://generativelanguage.googleapis.com/v1beta/models/{settings.gemini_model}:generateContent",
-            headers={"x-goog-api-key": settings.gemini_api_key},
+        resp = await http.post(
+            f"https://generativelanguage.googleapis.com/v1beta/models/{self._settings.gemini_model}:generateContent",
+            headers={"x-goog-api-key": self._settings.gemini_api_key},
             json={"contents": [{"parts": [{"text": full_prompt}]}]},
         )
         resp.raise_for_status()
@@ -155,23 +162,22 @@ class LLMClient:
         model: str | None = None,
     ) -> AsyncIterator[str]:
         """Stream tokens from Ollama. Yields individual text chunks."""
-        settings = get_settings()
-        m = model or settings.ollama_model
+        http = self._require_http()
+        m = model or self._settings.ollama_model
 
         payload: dict = {"model": m, "prompt": prompt, "stream": True}
         if system_prompt:
             payload["system"] = system_prompt
 
-        async with self._http.stream(
+        async with http.stream(
             "POST",
-            f"{settings.ollama_base_url}/api/generate",
+            f"{self._settings.ollama_base_url}/api/generate",
             json=payload,
         ) as resp:
             resp.raise_for_status()
-            import json as json_mod
             async for line in resp.aiter_lines():
                 if line.strip():
-                    data = json_mod.loads(line)
+                    data = json.loads(line)
                     token = data.get("response", "")
                     if token:
                         yield token
@@ -182,8 +188,7 @@ class LLMClient:
 
     async def embed(self, text: str, model: str | None = None) -> list[float]:
         """Generate an embedding vector for the given text."""
-        settings = get_settings()
-        m = model or settings.ollama_embed_model
+        m = model or self._settings.ollama_embed_model
 
         if self._available:
             try:
@@ -191,19 +196,19 @@ class LLMClient:
             except Exception as e:
                 logger.warning("Ollama embedding failed: %s", e)
 
-        if settings.openai_api_key:
+        if self._settings.openai_api_key:
             return await self._embed_openai(text)
 
-        if settings.gemini_api_key:
+        if self._settings.gemini_api_key:
             return await self._embed_gemini(text)
 
         raise RuntimeError("No embedding backend available")
 
     async def _embed_ollama(self, text: str, model: str) -> list[float]:
         """Embed via Ollama."""
-        settings = get_settings()
-        resp = await self._http.post(
-            f"{settings.ollama_base_url}/api/embed",
+        http = self._require_http()
+        resp = await http.post(
+            f"{self._settings.ollama_base_url}/api/embed",
             json={"model": model, "input": text},
         )
         resp.raise_for_status()
@@ -217,10 +222,10 @@ class LLMClient:
 
     async def _embed_openai(self, text: str) -> list[float]:
         """Embed via OpenAI."""
-        settings = get_settings()
-        resp = await self._http.post(
+        http = self._require_http()
+        resp = await http.post(
             "https://api.openai.com/v1/embeddings",
-            headers={"Authorization": f"Bearer {settings.openai_api_key}"},
+            headers={"Authorization": f"Bearer {self._settings.openai_api_key}"},
             json={"model": "text-embedding-3-small", "input": text},
         )
         resp.raise_for_status()
@@ -228,12 +233,12 @@ class LLMClient:
 
     async def _embed_gemini(self, text: str) -> list[float]:
         """Embed via Google Gemini API."""
-        settings = get_settings()
-        resp = await self._http.post(
-            "https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent",
-            headers={"x-goog-api-key": settings.gemini_api_key},
+        http = self._require_http()
+        resp = await http.post(
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-2-preview:embedContent",
+            headers={"x-goog-api-key": self._settings.gemini_api_key},
             json={
-                "model": "models/text-embedding-004",
+                "model": "models/gemini-embedding-2-preview",
                 "content": {"parts": [{"text": text}]}
             },
         )

@@ -15,6 +15,8 @@ import logging
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.core.security import extract_user_from_token
+from app.agents.retrieval import RetrievalAgent
+from app.agents.reasoning import ReasoningAgent
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +38,8 @@ def set_clients(graph_db, vector_db, llm):
 
 class ConnectionManager:
     """Manages active WebSocket connections with per-channel tracking."""
+
+    __slots__ = ("query_connections", "graph_connections")
 
     def __init__(self) -> None:
         self.query_connections: list[WebSocket] = []
@@ -91,8 +95,13 @@ async def query_stream(websocket: WebSocket):
             return
         token = auth_data["token"]
         extract_user_from_token(token)
+    except WebSocketDisconnect:
+        return
     except Exception:
-        await websocket.close(code=4003, reason="Invalid token or auth timeout")
+        try:
+            await websocket.close(code=4003, reason="Invalid token or auth timeout")
+        except RuntimeError:
+            pass
         return
 
     await manager.connect_query(websocket)
@@ -123,9 +132,6 @@ async def query_stream(websocket: WebSocket):
 
             # Run retrieval + streaming reasoning
             try:
-                from app.agents.retrieval import RetrievalAgent
-                from app.agents.reasoning import ReasoningAgent
-
                 retrieval = RetrievalAgent(_graph_db, _vector_db, _llm)
                 reasoning = ReasoningAgent(_llm)
 
@@ -176,8 +182,13 @@ async def graph_updates(websocket: WebSocket):
             return
         token = auth_data["token"]
         extract_user_from_token(token)
+    except WebSocketDisconnect:
+        return
     except Exception:
-        await websocket.close(code=4003, reason="Invalid token or auth timeout")
+        try:
+            await websocket.close(code=4003, reason="Invalid token or auth timeout")
+        except RuntimeError:
+            pass
         return
 
     await manager.connect_graph(websocket)

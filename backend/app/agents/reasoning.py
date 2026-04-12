@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import AsyncIterator, Any
+from typing import AsyncIterator
 
 from langgraph.graph import StateGraph, END
 
@@ -37,7 +37,7 @@ CITATION_EXTRACTION_PROMPT = """From the answer below, extract all citations. Re
 Answer:
 {answer}
 
-Return ONLY valid JSON array like: [{"badge": "...", "text": "..."}, ...]"""
+Return ONLY valid JSON array like: [{{"badge": "...", "text": "..."}}, ...]"""
 
 
 class ReasoningState(dict):
@@ -47,6 +47,8 @@ class ReasoningState(dict):
 
 class ReasoningAgent:
     """Multi-hop QA agent using LangGraph + Ollama."""
+
+    __slots__ = ("llm", "_graph")
 
     def __init__(self, llm: LLMClient) -> None:
         self.llm = llm
@@ -146,7 +148,8 @@ class ReasoningAgent:
         )
         return state
 
-    def _format_context(self, context: list[dict]) -> str:
+    @staticmethod
+    def _format_context(context: list[dict]) -> str:
         """Format retrieved context chunks into a readable string."""
         parts = []
         for i, chunk in enumerate(context):

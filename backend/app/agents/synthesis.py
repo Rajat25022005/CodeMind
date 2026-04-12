@@ -9,6 +9,7 @@ Also detects when current code diverges from documented intent.
 
 from __future__ import annotations
 
+import json
 import logging
 
 from app.core.graph_db import GraphDB
@@ -40,6 +41,8 @@ Return a JSON array of drift alerts."""
 
 class SynthesisAgent:
     """Generates summaries, onboarding narratives, and drift alerts from graph data."""
+
+    __slots__ = ("graph_db", "llm")
 
     def __init__(self, graph_db: GraphDB, llm: LLMClient) -> None:
         self.graph_db = graph_db
@@ -119,7 +122,6 @@ class SynthesisAgent:
 
         try:
             raw = await self.llm.generate(prompt, system_prompt=ONBOARDING_SYSTEM)
-            import json
             steps_data = json.loads(raw.strip())
             steps = [
                 OnboardingStep(
@@ -190,7 +192,6 @@ class SynthesisAgent:
 
         try:
             raw = await self.llm.generate(prompt, system_prompt=DRIFT_SYSTEM)
-            import json
             alerts_data = json.loads(raw.strip())
             alerts = [
                 DriftAlert(
@@ -228,7 +229,8 @@ class SynthesisAgent:
 
         return await self.graph_db.get_node_history(node_id)
 
-    def _format_history(self, history: list[dict]) -> str:
+    @staticmethod
+    def _format_history(history: list[dict]) -> str:
         """Format history records into a readable string for LLM."""
         parts = []
         for h in history:

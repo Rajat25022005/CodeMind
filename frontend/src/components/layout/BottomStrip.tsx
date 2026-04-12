@@ -1,13 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { mockStats } from '../../data/repo.mock';
 import { fetchStatus } from '../../lib/api';
 import type { StatusStats } from '../../types';
 import './BottomStrip.css';
 
+const POLL_INTERVAL_MS = 60_000; // Refresh status every 60 seconds
+
 const BottomStrip = () => {
   const [stats, setStats] = useState<StatusStats>(mockStats);
 
-  useEffect(() => {
+  const refreshStatus = useCallback(() => {
     fetchStatus()
       .then((res) => {
         setStats({
@@ -21,6 +23,12 @@ const BottomStrip = () => {
       })
       .catch((err) => console.warn('Failed to fetch status, using mock:', err));
   }, []);
+
+  useEffect(() => {
+    refreshStatus();
+    const interval = setInterval(refreshStatus, POLL_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [refreshStatus]);
 
   return (
     <footer className="bottomStrip">

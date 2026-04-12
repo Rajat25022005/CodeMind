@@ -12,17 +12,18 @@ export default function ForceGraphVisualizer({ activeNodeId, onNodeClick }: Forc
   const [graphData, setGraphData] = useState<{ nodes: any[]; links: any[] }>({ nodes: [], links: [] });
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
+  const resizeTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => {
     fetchGraph()
       .then((res) => {
         if (res.nodes && res.edges) {
-          const formattedLinks = res.edges.map((e: any) => ({
+          const formattedLinks = (res.edges as any[]).map((e: any) => ({
             ...e,
-            source: e.from || e.from_id,
-            target: e.to || e.to_id,
+            source: e.source || e.from || e.from_id,
+            target: e.target || e.to || e.to_id,
           }));
-          setGraphData({ nodes: res.nodes, links: formattedLinks });
+          setGraphData({ nodes: res.nodes as any[], links: formattedLinks });
         }
       })
       .catch((err) => {
@@ -37,18 +38,33 @@ export default function ForceGraphVisualizer({ activeNodeId, onNodeClick }: Forc
       });
   }, []);
 
+  // Debounced resize handler — avoids firing on every pixel
   useEffect(() => {
     const updateDimensions = () => {
-      if (containerRef.current) {
-        setDimensions({
-          width: containerRef.current.clientWidth,
-          height: containerRef.current.clientHeight,
-        });
-      }
+      if (resizeTimer.current) clearTimeout(resizeTimer.current);
+      resizeTimer.current = setTimeout(() => {
+        if (containerRef.current) {
+          setDimensions({
+            width: containerRef.current.clientWidth,
+            height: containerRef.current.clientHeight,
+          });
+        }
+      }, 100);
     };
+
+    // Initial measurement (immediate, no debounce)
+    if (containerRef.current) {
+      setDimensions({
+        width: containerRef.current.clientWidth,
+        height: containerRef.current.clientHeight,
+      });
+    }
+
     window.addEventListener('resize', updateDimensions);
-    updateDimensions();
-    return () => window.removeEventListener('resize', updateDimensions);
+    return () => {
+      window.removeEventListener('resize', updateDimensions);
+      if (resizeTimer.current) clearTimeout(resizeTimer.current);
+    };
   }, []);
 
   const activeEdgeSet = useMemo(() => {
@@ -62,7 +78,7 @@ export default function ForceGraphVisualizer({ activeNodeId, onNodeClick }: Forc
       }
     });
     return set;
-  }, [activeNodeId, graphData]);
+  }, [activeNodeId, graphData.links]);
 
   const paintNode = useCallback((node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
     const label = node.label || '';

@@ -1,15 +1,21 @@
 """
 Security utilities: Password hashing, JWT token generation, and FastAPI auth dependencies.
 """
+
+from __future__ import annotations
+
 from datetime import datetime, timedelta, timezone
+
+import bcrypt
 import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-import os
 
+from app.config import get_settings
 
-# Use a secure secret key from environment. Fails securely if missing.
-SECRET_KEY = os.getenv("SECRET_KEY", "")
+# Load secret key from centralized Settings (reads .env via pydantic-settings)
+_settings = get_settings()
+SECRET_KEY = _settings.secret_key
 if not SECRET_KEY or len(SECRET_KEY) < 32:
     raise ValueError("CRITICAL: SECRET_KEY environment variable is missing or too short (must be >= 32 chars)!")
 ALGORITHM = "HS256"
@@ -17,8 +23,6 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60  # 1 hour
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
-
-import bcrypt
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a plain password against its hashed version."""

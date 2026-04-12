@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
-import os
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -22,13 +22,27 @@ from app.codebase.schemas import ChunkRecord
 logger = logging.getLogger(__name__)
 
 # Supported source file extensions for AST parsing
-PARSEABLE_EXTENSIONS = {
+PARSEABLE_EXTENSIONS = frozenset({
     ".py", ".js", ".ts", ".jsx", ".tsx", ".java", ".go", ".rs", ".c", ".cpp",
-}
+})
+
+# Pre-compiled regex patterns for entity extraction (avoids recompilation per file)
+_PY_ENTITY_RE = re.compile(r"^(class|def)\s+(\w+)\s*[\(:]", re.MULTILINE)
+_JS_ENTITY_RE = re.compile(
+    r"(?:export\s+)?(?:async\s+)?(?:function|class)\s+(\w+)", re.MULTILINE,
+)
+_JS_ARROW_RE = re.compile(
+    r"(?:export\s+)?const\s+(\w+)\s*=\s*(?:async\s+)?\(", re.MULTILINE,
+)
+
+# Directories to skip during file traversal
+_SKIP_DIRS = frozenset(("node_modules", "vendor", "__pycache__", "dist", "build"))
 
 
 class IngestionAgent:
     """Processes a git repository into structured chunks for indexing."""
+
+    __slots__ = ("repo_path", "repo")
 
     def __init__(self, repo_path: str) -> None:
         self.repo_path = repo_path
@@ -59,7 +73,6 @@ class IngestionAgent:
             raise ValueError(f"Repository is bare: {self.repo_path}")
 
         chunks: list[ChunkRecord] = []
-        file_chunks: list[ChunkRecord] = []
 
         # Step 1: Walk commits
         commit_chunks = await self._walk_commits(max_commits, branch)
@@ -156,7 +169,7 @@ class IngestionAgent:
             for file_path in repo_root.rglob(f"*{ext}"):
                 # Skip hidden dirs, node_modules, vendor, etc.
                 parts = file_path.parts
-                if any(p.startswith(".") or p in ("node_modules", "vendor", "__pycache__", "dist", "build") for p in parts):
+                if any(p.startswith(".") or p in _SKIP_DIRS for p in parts):
                     continue
 
                 try:
@@ -208,20 +221,18 @@ class IngestionAgent:
 
         return chunks
 
-    def _extract_entities(self, content: str, ext: str) -> list[dict]:
+    @staticmethod
+    def _extract_entities(content: str, ext: str) -> list[dict]:
         """
         Extract function/class definitions from source code.
-        Uses regex-based extraction as a baseline.
+        Uses pre-compiled regex patterns as a baseline.
         For production, replace with Tree-sitter AST parsing.
         """
-        import re
         entities: list[dict] = []
 
         if ext == ".py":
             # Python functions and classes
-            for match in re.finditer(
-                r"^(class|def)\s+(\w+)\s*[\(:]", content, re.MULTILINE
-            ):
+            for match in _PY_ENTITY_RE.finditer(content):
                 kind = "class" if match.group(1) == "class" else "function"
                 name = match.group(2)
                 line_num = content[:match.start()].count("\n") + 1
@@ -235,10 +246,7 @@ class IngestionAgent:
 
         elif ext in (".js", ".ts", ".jsx", ".tsx"):
             # JavaScript/TypeScript functions and classes
-            for match in re.finditer(
-                r"(?:export\s+)?(?:async\s+)?(?:function|class)\s+(\w+)",
-                content, re.MULTILINE,
-            ):
+            for match in _JS_ENTITY_RE.finditer(content):
                 name = match.group(1)
                 line_num = content[:match.start()].count("\n") + 1
                 entities.append({
@@ -246,10 +254,7 @@ class IngestionAgent:
                 })
 
             # Arrow functions assigned to const
-            for match in re.finditer(
-                r"(?:export\s+)?const\s+(\w+)\s*=\s*(?:async\s+)?\(",
-                content, re.MULTILINE,
-            ):
+            for match in _JS_ARROW_RE.finditer(content):
                 name = match.group(1)
                 line_num = content[:match.start()].count("\n") + 1
                 entities.append({

@@ -10,6 +10,7 @@ Uses reciprocal rank fusion to merge results from both sources.
 from __future__ import annotations
 
 import logging
+import re
 
 from app.core.graph_db import GraphDB
 from app.core.vector_db import VectorDB
@@ -17,9 +18,14 @@ from app.core.llm import LLMClient
 
 logger = logging.getLogger(__name__)
 
+# Pre-compiled regex for fallback entity extraction from queries
+_CODE_IDENTIFIER_RE = re.compile(r"\b[a-z_]\w+(?:\.\w+)*\b")
+
 
 class RetrievalAgent:
     """Performs hybrid retrieval across vector store and knowledge graph."""
+
+    __slots__ = ("graph_db", "vector_db", "llm")
 
     def __init__(
         self,
@@ -153,11 +159,10 @@ class RetrievalAgent:
         except Exception as e:
             logger.debug("Entity extraction failed: %s", e)
             # Fallback: extract words that look like code identifiers
-            import re
-            return re.findall(r"\b[a-z_]\w+(?:\.\w+)*\b", query.lower())[:5]
+            return _CODE_IDENTIFIER_RE.findall(query.lower())[:5]
 
+    @staticmethod
     def _reciprocal_rank_fusion(
-        self,
         vector_results: list[dict],
         graph_results: list[dict],
         top_k: int,

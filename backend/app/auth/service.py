@@ -1,10 +1,15 @@
 """
 Authentication Business Logic.
 """
+
+from __future__ import annotations
+
 import secrets
 import string
-from fastapi import HTTPException, status
 import time
+
+from fastapi import HTTPException, status
+
 from app.core.security import get_password_hash, verify_password, create_access_token
 from app.core.mail import send_verification_email
 from app.core.graph_db import GraphDB
@@ -16,6 +21,8 @@ def generate_verification_code() -> str:
 
 
 class AuthService:
+    __slots__ = ("db",)
+
     def __init__(self, db: GraphDB):
         self.db = db
 

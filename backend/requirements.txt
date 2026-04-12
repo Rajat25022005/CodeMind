@@ -7,7 +7,7 @@ python-multipart>=0.0.9     # Required by FastAPI for form/file uploads
 pydantic-settings>=2.0.0    # Typed settings from .env files
 
 # ── Auth & Security ──
-passlib[bcrypt]>=1.7.4      # Password hashing
+bcrypt>=4.0.0                # Password hashing (used directly, not via passlib)
 PyJWT>=2.8.0                # JWT Token generation
 email-validator>=2.1.0      # Pydantic email validation
 aiosmtplib>=3.0.1           # Async SMTP email sending

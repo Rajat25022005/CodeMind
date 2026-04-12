@@ -137,5 +137,12 @@ app.include_router(ws_router)
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint — returns status without leaking component internals."""
-    return {"status": "ok"}
+    """Health check endpoint — returns live connection status for all services."""
+    return {
+        "status": "ok",
+        "services": {
+            "neo4j": graph_db.connected,
+            "qdrant": vector_db.connected,
+            "ollama": llm.available,
+        },
+    }

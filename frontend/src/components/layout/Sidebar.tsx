@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useUIStore } from '../../stores/uiStore';
 import { sidebarItems, sidebarSecondary } from '../../data/repo.mock';
@@ -11,7 +12,12 @@ const Sidebar = () => {
   const toggleDrift = useUIStore((s) => s.toggleDrift);
   const logout = useAuthStore((s) => s.logout);
 
-  const isActive = (path: string) => location.pathname === path;
+  const isActive = useCallback((path: string) => location.pathname === path, [location.pathname]);
+
+  const handleLogout = useCallback(() => {
+    logout();
+    navigate('/login');
+  }, [logout, navigate]);
 
   return (
     <nav className="sidebar" aria-label="Main navigation">
@@ -45,10 +51,7 @@ const Sidebar = () => {
       <button 
         className="sbBtn mt-auto mb-4 hover:text-red-400" 
         title="Logout" 
-        onClick={() => {
-          logout();
-          navigate('/login');
-        }}
+        onClick={handleLogout}
       >
         🚪
       </button>

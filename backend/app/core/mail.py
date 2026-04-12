@@ -2,9 +2,13 @@
 Async Email Service for sending verification codes.
 In development (SMTP not configured), it mocks email by logging to the console.
 """
+
+from __future__ import annotations
+
 import logging
 import os
 from email.message import EmailMessage
+
 import aiosmtplib
 
 logger = logging.getLogger(__name__)
@@ -22,9 +26,10 @@ async def send_verification_email(to_email: str, code: str) -> None:
         # Development / Mock mode
         logger.warning(
             "\n" + "="*50 + "\n"
-            f"MOCK EMAIL SENT TO: {to_email}\n"
-            f"VERIFICATION CODE: {code}\n"
-            + "="*50 + "\n"
+            "MOCK EMAIL SENT TO: %s\n"
+            "VERIFICATION CODE: %s\n"
+            + "="*50 + "\n",
+            to_email, code,
         )
         return
 
@@ -45,7 +50,7 @@ async def send_verification_email(to_email: str, code: str) -> None:
             use_tls=SMTP_PORT == 465,
             start_tls=SMTP_PORT == 587,
         )
-        logger.info(f"Verification email sent to {to_email}")
+        logger.info("Verification email sent to %s", to_email)
     except Exception as e:
-        logger.error(f"Failed to send email to {to_email}: {e}")
+        logger.error("Failed to send email to %s: %s", to_email, e)
         # Optionally raise exception if you want registration to fail when email fails

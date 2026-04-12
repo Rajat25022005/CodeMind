@@ -1,18 +1,20 @@
 """
 Authentication API Endpoints.
 """
-from fastapi import APIRouter, Depends, status, Request, HTTPException
+
+import threading
 import time
+
+from fastapi import APIRouter, Depends, status, Request, HTTPException
 
 from app.auth.schemas import RegisterRequest, VerifyRequest, LoginRequest, TokenResponse, UserProfile
 from app.auth.service import AuthService
+from app.core.graph_db import GraphDB
 from app.core.security import get_current_user
 
 router = APIRouter(tags=["auth"])
 
-import threading
-
-_graph_db = None
+_graph_db: GraphDB | None = None
 _rate_limits: dict[str, list[float]] = {}
 _lock = threading.Lock()
 
@@ -38,7 +40,7 @@ def rate_limit(request: Request):
         _rate_limits[client_ip] = recent
 
 
-def set_auth_clients(graph_db):
+def set_auth_clients(graph_db: GraphDB) -> None:
     """Injected by main.py at startup."""
     global _graph_db
     _graph_db = graph_db

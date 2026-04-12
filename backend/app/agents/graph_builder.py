@@ -9,10 +9,10 @@ Simultaneously embeds chunks into Qdrant for vector search.
 
 from __future__ import annotations
 
-import logging
-import json
-import re
 import asyncio
+import json
+import logging
+import re
 from typing import Any
 
 from app.core.graph_db import GraphDB
@@ -35,9 +35,14 @@ Respond in this exact JSON format:
 
 Only return the JSON. No explanation."""
 
+# Pre-compiled regex for JSON extraction
+_JSON_RE = re.compile(r'\{.*\}', re.DOTALL)
+
 
 class GraphBuilderAgent:
     """Builds and maintains the temporal knowledge graph in Neo4j."""
+
+    __slots__ = ("graph_db", "vector_db", "llm")
 
     def __init__(
         self,
@@ -63,8 +68,8 @@ class GraphBuilderAgent:
         edges_created = 0
         vectors_upserted = 0
 
-        node_batch = []
-        edge_batch = []
+        node_batch: list[dict[str, Any]] = []
+        edge_batch: list[dict[str, Any]] = []
 
         # Pass 1: Create nodes from structured chunk metadata
         for chunk in chunks:
@@ -84,7 +89,7 @@ class GraphBuilderAgent:
             edges_created += await self.graph_db.bulk_create_edges(edge_batch)
 
         # Pass 2: LLM-based relationship extraction for code chunks
-        llm_edges = []
+        llm_edges: list[dict[str, Any]] = []
         code_chunks = [c for c in chunks if c.chunk_type == "code" and c.content]
         for chunk in code_chunks[:100]:  # Limit to prevent excessive LLM calls
             try:
@@ -199,8 +204,6 @@ class GraphBuilderAgent:
 
     async def _extract_relationships(self, chunk: ChunkRecord) -> list:
         """Use LLM to extract semantic relationships from a code chunk."""
-        # Remove inline imports
-
         prompt = f"""Analyze this code chunk and extract entities and relationships:
 
 File: {chunk.source_file}
@@ -212,14 +215,14 @@ Content:
         try:
             response = await self.llm.generate(prompt, system_prompt=EXTRACTION_PROMPT)
             # Resilient JSON parsing
-            match = re.search(r'\{.*\}', response.strip(), re.DOTALL)
+            match = _JSON_RE.search(response.strip())
             json_str = match.group(0) if match else response.strip()
             data = json.loads(json_str)
         except (json.JSONDecodeError, Exception) as e:
             logger.debug("LLM extraction parse error: %s", e)
             return []
 
-        rel_batch = []
+        rel_batch: list[dict[str, Any]] = []
         relationships = data.get("relationships", [])
         for rel in relationships:
             source = rel.get("source", "")
@@ -266,7 +269,7 @@ Content:
                     }
                     return {"id": chunk.id, "vector": vector, "payload": payload}
                 except Exception as e:
-                    logger.error(f"Failed to embed chunk {chunk.id}: {e}")
+                    logger.error("Failed to embed chunk %s: %s", chunk.id, e)
                     return None
 
         tasks = [embed_one(c) for c in chunks if c.content.strip()]
@@ -280,5 +283,5 @@ Content:
             await self.vector_db.upsert_batch(batch)
             inserted += len(batch)
 
-        logger.info(f"Embedded and stored {inserted}/{len(chunks)} chunks in Vector DB")
+        logger.info("Embedded and stored %d/%d chunks in Vector DB", inserted, len(chunks))
         return inserted
