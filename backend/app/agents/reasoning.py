@@ -15,8 +15,8 @@ from typing import AsyncIterator, Any
 
 from langgraph.graph import StateGraph, END
 
-from core.llm import LLMClient
-from models import QueryResponse, Citation, TraceStep, StreamChunk
+from app.core.llm import LLMClient
+from app.codebase.schemas import QueryResponse, Citation, TraceStep, StreamChunk
 
 logger = logging.getLogger(__name__)
 

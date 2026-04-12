@@ -11,9 +11,10 @@ from __future__ import annotations
 import logging
 import uuid
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Depends
 
-from models import (
+from app.core.security import get_current_user
+from app.codebase.schemas import (
     IngestRequest,
     IngestResponse,
     QueryRequest,
@@ -47,11 +48,11 @@ def set_clients(graph_db, vector_db, llm):
 
 def _get_agents():
     """Lazy-construct agents from shared clients."""
-    from agents.ingestion import IngestionAgent
-    from agents.graph_builder import GraphBuilderAgent
-    from agents.retrieval import RetrievalAgent
-    from agents.reasoning import ReasoningAgent
-    from agents.synthesis import SynthesisAgent
+    from app.agents.ingestion import IngestionAgent
+    from app.agents.graph_builder import GraphBuilderAgent
+    from app.agents.retrieval import RetrievalAgent
+    from app.agents.reasoning import ReasoningAgent
+    from app.agents.synthesis import SynthesisAgent
 
     return {
         "graph_builder": GraphBuilderAgent(_graph_db, _vector_db, _llm),
@@ -65,8 +66,8 @@ def _get_agents():
 
 async def _run_ingestion(repo_path: str, branch: str, max_commits: int | None):
     """Background task: run the full ingestion + graph build pipeline."""
-    from agents.ingestion import IngestionAgent
-    from agents.graph_builder import GraphBuilderAgent
+    from app.agents.ingestion import IngestionAgent
+    from app.agents.graph_builder import GraphBuilderAgent
 
     try:
         logger.info("Background ingestion started for %s", repo_path)
@@ -87,6 +88,7 @@ async def _run_ingestion(repo_path: str, branch: str, max_commits: int | None):
 async def ingest_repository(
     request: IngestRequest,
     background_tasks: BackgroundTasks,
+    user: dict = Depends(get_current_user)
 ):
     """
     Ingest a local git repository.
@@ -108,7 +110,7 @@ async def ingest_repository(
 # ── Query ──
 
 @router.post("/query", response_model=QueryResponse)
-async def query_codebase(request: QueryRequest):
+async def query_codebase(request: QueryRequest, user: dict = Depends(get_current_user)):
     """
     Query the codebase knowledge graph.
     Performs hybrid retrieval + multi-hop reasoning.
@@ -131,7 +133,7 @@ async def query_codebase(request: QueryRequest):
 # ── Graph ──
 
 @router.get("/graph", response_model=GraphResponse)
-async def get_graph():
+async def get_graph(user: dict = Depends(get_current_user)):
     """Return the full knowledge graph for visualization."""
     if not _graph_db or not _graph_db.connected:
         raise HTTPException(503, "Graph database not available")
@@ -141,7 +143,7 @@ async def get_graph():
 
 
 @router.get("/graph/{node_id}")
-async def get_node_neighbors(node_id: str, depth: int = 2):
+async def get_node_neighbors(node_id: str, depth: int = 2, user: dict = Depends(get_current_user)):
     """Get a node and its neighbors."""
     if not _graph_db or not _graph_db.connected:
         raise HTTPException(503, "Graph database not available")
@@ -153,7 +155,7 @@ async def get_node_neighbors(node_id: str, depth: int = 2):
 # ── Drift Detection ──
 
 @router.get("/drift", response_model=DriftResponse)
-async def get_drift_alerts(module: str | None = None):
+async def get_drift_alerts(module: str | None = None, user: dict = Depends(get_current_user)):
     """Return current drift detection alerts."""
     if not _graph_db or not _llm:
         raise HTTPException(503, "Services not available")
@@ -166,7 +168,7 @@ async def get_drift_alerts(module: str | None = None):
 # ── Onboarding ──
 
 @router.post("/onboard", response_model=OnboardingResponse)
-async def get_onboarding(request: OnboardingRequest):
+async def get_onboarding(request: OnboardingRequest, user: dict = Depends(get_current_user)):
     """Generate an onboarding walkthrough for a module."""
     if not _graph_db or not _llm:
         raise HTTPException(503, "Services not available")
@@ -178,7 +180,7 @@ async def get_onboarding(request: OnboardingRequest):
 # ── Timeline ──
 
 @router.get("/timeline", response_model=TimelineResponse)
-async def get_timeline(limit: int = 50):
+async def get_timeline(limit: int = 50, user: dict = Depends(get_current_user)):
     """Return chronological events from the knowledge graph."""
     if not _graph_db or not _graph_db.connected:
         raise HTTPException(503, "Graph database not available")
@@ -210,7 +212,7 @@ async def get_timeline(limit: int = 50):
 # ── Files ──
 
 @router.get("/files")
-async def get_files():
+async def get_files(user: dict = Depends(get_current_user)):
     """Return indexed file list from the knowledge graph."""
     if not _graph_db or not _graph_db.connected:
         raise HTTPException(503, "Graph database not available")
@@ -240,7 +242,7 @@ async def get_files():
 # ── Commits ──
 
 @router.get("/commits")
-async def get_commits(limit: int = 50):
+async def get_commits(limit: int = 50, user: dict = Depends(get_current_user)):
     """Return commit history from the knowledge graph."""
     if not _graph_db or not _graph_db.connected:
         raise HTTPException(503, "Graph database not available")
@@ -273,7 +275,7 @@ async def get_commits(limit: int = 50):
 # ── Status ──
 
 @router.get("/status", response_model=StatusResponse)
-async def get_status():
+async def get_status(user: dict = Depends(get_current_user)):
     """Return system status — node/edge counts, model info, drift count."""
     stats = {"nodes": 0, "edges": 0, "commits": 0}
 
@@ -285,7 +287,7 @@ async def get_status():
 
     model = ""
     if _llm and _llm.available:
-        from config import get_settings
+        from app.config import get_settings
         model = get_settings().ollama_model
 
     drift_count = 0

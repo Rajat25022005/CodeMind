@@ -2,12 +2,14 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useUIStore } from '../../stores/uiStore';
 import { sidebarItems, sidebarSecondary } from '../../data/repo.mock';
 import { mockDriftItems } from '../../data/drift.mock';
+import { useAuthStore } from '../../stores/authStore';
 import './Sidebar.css';
 
 const Sidebar = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const toggleDrift = useUIStore((s) => s.toggleDrift);
+  const logout = useAuthStore((s) => s.logout);
 
   const isActive = (path: string) => location.pathname === path;
 
@@ -38,6 +40,17 @@ const Sidebar = () => {
       <button className="sbAlert" title="Drift Alerts" onClick={toggleDrift}>
         ⚠
         <span className="alertBadge">{mockDriftItems.length}</span>
+      </button>
+      <div className="flex-1" />
+      <button 
+        className="sbBtn mt-auto mb-4 hover:text-red-400" 
+        title="Logout" 
+        onClick={() => {
+          logout();
+          navigate('/login');
+        }}
+      >
+        🚪
       </button>
     </nav>
   );

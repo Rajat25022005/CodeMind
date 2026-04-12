@@ -20,7 +20,7 @@ from qdrant_client.models import (
     MatchValue,
 )
 
-from config import get_settings
+from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 

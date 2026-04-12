@@ -2,8 +2,15 @@
 # ── Web Framework ──
 fastapi>=0.111.0            # Async REST API + WebSocket framework
 uvicorn[standard]>=0.29.0   # ASGI server to run FastAPI
+gunicorn>=22.0.0             # Production process manager with Uvicorn workers
 python-multipart>=0.0.9     # Required by FastAPI for form/file uploads
 pydantic-settings>=2.0.0    # Typed settings from .env files
+
+# ── Auth & Security ──
+passlib[bcrypt]>=1.7.4      # Password hashing
+PyJWT>=2.8.0                # JWT Token generation
+email-validator>=2.1.0      # Pydantic email validation
+aiosmtplib>=3.0.1           # Async SMTP email sending
 
 # ── Databases ──
 neo4j>=5.19.0               # Neo4j async driver — temporal knowledge graph

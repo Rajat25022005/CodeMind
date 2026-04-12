@@ -44,8 +44,8 @@ class GraphNode(BaseModel):
 
 
 class GraphEdge(BaseModel):
-    source: str = Field(alias="from_id")
-    target: str = Field(alias="to_id")
+    from_id: str = Field(serialization_alias="from")
+    to_id: str = Field(serialization_alias="to")
     type: EdgeType
     properties: dict = Field(default_factory=dict)
 

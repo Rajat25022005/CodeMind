@@ -13,6 +13,8 @@ import logging
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from app.core.security import extract_user_from_token
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
@@ -75,7 +77,7 @@ manager = ConnectionManager()
 
 
 @router.websocket("/ws/query")
-async def query_stream(websocket: WebSocket):
+async def query_stream(websocket: WebSocket, token: str | None = None):
     """
     WebSocket endpoint for streaming Q&A responses.
 
@@ -104,6 +106,17 @@ async def query_stream(websocket: WebSocket):
 
             top_k = data.get("top_k", 10)
 
+            # Verify authentication
+            if not token:
+                await websocket.send_json({"type": "error", "content": "Authentication token missing"})
+                continue
+                
+            try:
+                extract_user_from_token(token)
+            except Exception:
+                await websocket.send_json({"type": "error", "content": "Invalid or expired token"})
+                continue
+
             # Check if services are available
             if not _llm or not _llm.available:
                 await websocket.send_json({
@@ -114,8 +127,8 @@ async def query_stream(websocket: WebSocket):
 
             # Run retrieval + streaming reasoning
             try:
-                from agents.retrieval import RetrievalAgent
-                from agents.reasoning import ReasoningAgent
+                from app.agents.retrieval import RetrievalAgent
+                from app.agents.reasoning import ReasoningAgent
 
                 retrieval = RetrievalAgent(_graph_db, _vector_db, _llm)
                 reasoning = ReasoningAgent(_llm)

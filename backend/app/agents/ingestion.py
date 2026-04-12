@@ -17,7 +17,7 @@ from pathlib import Path
 
 from git import Repo
 
-from models import ChunkRecord
+from app.codebase.schemas import ChunkRecord
 
 logger = logging.getLogger(__name__)
 

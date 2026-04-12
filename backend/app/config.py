@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     # ── Neo4j ──
     neo4j_uri: str = "bolt://localhost:7687"
     neo4j_user: str = "neo4j"
-    neo4j_password: str = "codemind_dev"
+    neo4j_password: str  # Required — must be set in .env or environment
 
     # ── Qdrant ──
     qdrant_host: str = "localhost"
@@ -38,8 +38,12 @@ class Settings(BaseSettings):
 
     # ── Application ──
     debug: bool = False
+    log_level: str = "INFO"
     embed_dimension: int = 768
     collection_name: str = "codemind_chunks"
+
+    # ── CORS ──
+    allowed_origins: str = "http://localhost:5173,http://localhost:3000"
 
 
 @lru_cache

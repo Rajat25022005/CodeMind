@@ -42,7 +42,7 @@ body {
 }
 
 @keyframes flow-edge {
-  0% { stroke-dashoffset: 20; }
+  0% { stroke-dashoffset: 0.016; }
   100% { stroke-dashoffset: 0; }
 }
 

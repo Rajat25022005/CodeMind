@@ -11,9 +11,9 @@ from __future__ import annotations
 
 import logging
 
-from core.graph_db import GraphDB
-from core.llm import LLMClient
-from models import (
+from app.core.graph_db import GraphDB
+from app.core.llm import LLMClient
+from app.codebase.schemas import (
     OnboardingStep,
     OnboardingResponse,
     DriftAlert,

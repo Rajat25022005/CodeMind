@@ -18,14 +18,16 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from config import get_settings
-from core.graph_db import GraphDB
-from core.vector_db import VectorDB
-from core.llm import LLMClient
-from api.routes import router as api_router
-from api.routes import set_clients as set_route_clients
-from api.websocket import router as ws_router
-from api.websocket import set_clients as set_ws_clients
+from app.config import get_settings
+from app.core.graph_db import GraphDB
+from app.core.vector_db import VectorDB
+from app.core.llm import LLMClient
+from app.codebase.router import router as codebase_router
+from app.codebase.router import set_clients as set_codebase_clients
+from app.codebase.websocket import router as ws_router
+from app.codebase.websocket import set_clients as set_ws_clients
+from app.auth.router import router as auth_router
+from app.auth.router import set_auth_clients
 
 # ── Logging ──
 logging.basicConfig(
@@ -44,6 +46,10 @@ llm = LLMClient()
 async def lifespan(app: FastAPI):
     """Application lifespan — startup and shutdown hooks."""
     settings = get_settings()
+
+    # Set log level from config (allows DEBUG in dev, WARNING in prod)
+    logging.getLogger().setLevel(getattr(logging, settings.log_level.upper(), logging.INFO))
+
     logger.info("CodeMind API starting up...")
 
     # Connect Neo4j
@@ -66,8 +72,9 @@ async def lifespan(app: FastAPI):
         logger.warning("Ollama unavailable — LLM features disabled: %s", e)
 
     # Inject clients into route and WebSocket modules
-    set_route_clients(graph_db, vector_db, llm)
+    set_codebase_clients(graph_db, vector_db, llm)
     set_ws_clients(graph_db, vector_db, llm)
+    set_auth_clients(graph_db)
 
     logger.info(
         "Startup complete — Neo4j: %s, Qdrant: %s, LLM: %s",
@@ -93,20 +100,23 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS configuration for frontend
+# CORS — allowed origins loaded from environment
+_settings = get_settings()
+_origins = [o.strip() for o in _settings.allowed_origins.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://localhost:3000",
-    ],
+    allow_origins=_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+logger.info("CORS configured for %d origin(s)", len(_origins))
+
 # Register routers
-app.include_router(api_router, prefix="/api")
+app.include_router(auth_router, prefix="/api/auth")
+app.include_router(codebase_router, prefix="/api")
 app.include_router(ws_router)
 
 

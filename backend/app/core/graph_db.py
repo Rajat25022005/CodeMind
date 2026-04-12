@@ -12,8 +12,8 @@ from typing import Any
 
 from neo4j import AsyncGraphDatabase, AsyncDriver
 
-from config import get_settings
-from models import GraphNode, GraphEdge, NodeType, EdgeType
+from app.config import get_settings
+from app.codebase.schemas import GraphNode, GraphEdge, NodeType, EdgeType
 
 logger = logging.getLogger(__name__)
 
@@ -242,3 +242,47 @@ class GraphDB:
         async with self._driver.session() as session:
             result = await session.run(cypher, **(params or {}))
             return [dict(record) async for record in result]
+
+    # ── User Operations (Auth) ──
+
+    async def get_user_by_email(self, email: str) -> dict | None:
+        """Fetch a User node by email."""
+        query = "MATCH (u:User {email: $email}) RETURN u"
+        async with self._driver.session() as session:
+            result = await session.run(query, email=email)
+            record = await result.single()
+            if not record:
+                return None
+            return dict(record["u"])
+
+    async def create_user(self, email: str, hashed_password: str, verification_code: str) -> dict:
+        """Create a new unverified user."""
+        query = """
+        MERGE (u:User {email: $email})
+        ON CREATE SET u.hashed_password = $hashed_password,
+                      u.is_verified = false,
+                      u.verification_code = $verification_code,
+                      u.created_at = timestamp()
+        RETURN u
+        """
+        async with self._driver.session() as session:
+            result = await session.run(
+                query,
+                email=email,
+                hashed_password=hashed_password,
+                verification_code=verification_code
+            )
+            record = await result.single()
+            return dict(record["u"])
+
+    async def verify_user(self, email: str) -> bool:
+        """Mark a user as verified."""
+        query = """
+        MATCH (u:User {email: $email})
+        SET u.is_verified = true, u.verification_code = null
+        RETURN u
+        """
+        async with self._driver.session() as session:
+            result = await session.run(query, email=email)
+            record = await result.single()
+            return bool(record)

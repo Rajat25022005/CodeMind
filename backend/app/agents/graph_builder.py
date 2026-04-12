@@ -12,10 +12,10 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from core.graph_db import GraphDB
-from core.vector_db import VectorDB
-from core.llm import LLMClient
-from models import ChunkRecord, NodeType, EdgeType
+from app.core.graph_db import GraphDB
+from app.core.vector_db import VectorDB
+from app.core.llm import LLMClient
+from app.codebase.schemas import ChunkRecord, NodeType, EdgeType
 
 logger = logging.getLogger(__name__)
 

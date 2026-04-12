@@ -11,9 +11,9 @@ from __future__ import annotations
 
 import logging
 
-from core.graph_db import GraphDB
-from core.vector_db import VectorDB
-from core.llm import LLMClient
+from app.core.graph_db import GraphDB
+from app.core.vector_db import VectorDB
+from app.core.llm import LLMClient
 
 logger = logging.getLogger(__name__)
 

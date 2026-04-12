@@ -17,6 +17,18 @@ COPY . .
 # Set PYTHONPATH so imports resolve correctly
 ENV PYTHONPATH=/app
 
+# Create unprivileged user for production safety
+RUN addgroup --system --gid 1001 appgroup && \
+    adduser --system --uid 1001 --ingroup appgroup appuser
+USER appuser
+
 EXPOSE 8000
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Production: gunicorn with uvicorn workers for concurrency + process management
+# Workers default to 4; override via GUNICORN_WORKERS env var
+CMD ["gunicorn", "main:app", \
+     "--worker-class", "uvicorn.workers.UvicornWorker", \
+     "--workers", "4", \
+     "--bind", "0.0.0.0:8000", \
+     "--access-logfile", "-", \
+     "--error-logfile", "-"]
