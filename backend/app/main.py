@@ -15,7 +15,7 @@ from app.codebase.router import router as codebase_router
 from app.codebase.router import set_clients as set_codebase_clients
 from app.codebase.websocket import router as ws_router
 from app.codebase.websocket import set_clients as set_ws_clients
-from app.auth.router import router as auth_router
+from app.auth.router import router as auth_router, set_auth_clients
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
 
