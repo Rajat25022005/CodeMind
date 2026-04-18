@@ -54,16 +54,24 @@ const DecisionTrailPage = () => {
         <button
           className="filterBtn"
           onClick={handleClear}
-          style={{ padding: '6px 14px', fontSize: '11px' }}
+          style={{ padding: '6px 14px', fontSize: '11px', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
         >
-          🗑 Clear
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="3 6 5 6 21 6" />
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+          </svg>
+          Clear
         </button>
       </div>
 
       <div className="dtMessages">
         {messages.length === 0 ? (
           <div className="emptyState">
-            <div className="emptyIcon">💬</div>
+            <div className="emptyIcon">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.5 }}>
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
+            </div>
             <div className="emptyTitle">No messages yet</div>
             <div className="emptyDesc">Ask about any decision, architecture choice, or code evolution.</div>
           </div>
@@ -73,7 +81,7 @@ const DecisionTrailPage = () => {
         {isThinking && (
           <div className="msg msgAi">
             <div className="msgBubble" style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--muted)' }}>
-              ● Reasoning<span className="streamCursor" />
+              Reasoning<span className="streamCursor" />
             </div>
           </div>
         )}

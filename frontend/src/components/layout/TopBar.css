@@ -7,7 +7,8 @@
   gap: 16px;
   background: var(--bg1);
   flex-shrink: 0;
-  z-index: 10;
+  z-index: 50;
+  position: relative;
 }
 
 .logo {
@@ -78,6 +79,9 @@
   cursor: pointer;
   transition: all 0.2s;
   background: transparent;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
 }
 
 .pillCyan {
@@ -101,6 +105,10 @@
 }
 
 /* ── Nav Icons ── */
+.navIconWrap {
+  position: relative;
+}
+
 .navIcon {
   width: 32px;
   height: 32px;
@@ -112,9 +120,103 @@
   justify-content: center;
   cursor: pointer;
   font-size: 14px;
-  transition: border-color 0.2s;
+  transition: all 0.2s;
+  color: var(--muted);
 }
 
 .navIcon:hover {
   border-color: rgba(0, 212, 255, 0.4);
+  color: var(--text);
 }
+
+.navIconActive {
+  border-color: var(--cyan);
+  color: var(--cyan);
+  background: var(--cyan-dim);
+  box-shadow: 0 0 8px rgba(0, 212, 255, 0.15);
+}
+
+/* ── Dropdown Panels ── */
+.dropdownPanel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 240px;
+  background: var(--bg1);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 0;
+  z-index: 100;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255,255,255,0.04);
+  animation: appear 0.15s ease forwards;
+}
+
+.dpanelTitle {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  padding: 0 16px 10px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 6px;
+}
+
+.dpanelSection {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 5px 16px;
+}
+
+.dpanelLabel {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.dpanelValue {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text);
+  font-weight: 500;
+}
+
+.dpanelDivider {
+  height: 1px;
+  background: var(--border);
+  margin: 8px 16px;
+}
+
+.dpanelProfile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 16px 10px;
+}
+
+.dpanelAvatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--cyan-dim);
+  border: 1px solid rgba(0, 212, 255, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.dpanelName {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.dpanelEmail {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--muted);
+  margin-top: 1px;
+}
+

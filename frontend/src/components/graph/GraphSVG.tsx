@@ -1,13 +1,42 @@
 import { useRef, useEffect, useCallback } from 'react';
 import { graphNodes, graphEdges, nodeColors, edgeColors } from '../../data/mockData';
+import type { GraphNode } from '../../types';
 import './GraphSVG.css';
 
 interface GraphSVGProps {
   activeNodeId: string | null;
   onNodeClick: (id: string) => void;
+  viewMode?: string;
 }
 
-const GraphSVG = ({ activeNodeId, onNodeClick }: GraphSVGProps) => {
+/**
+ * Filters nodes based on the active toolbar view mode.
+ * - graph: show all nodes
+ * - cluster: show only module nodes and their connections
+ * - timeline: show only commit/pr nodes
+ * - filter: show only drift nodes and their dependencies
+ */
+function getFilteredData(viewMode: string) {
+  let filteredNodes: GraphNode[];
+  switch (viewMode) {
+    case 'cluster':
+      filteredNodes = graphNodes.filter((n) => n.type === 'module');
+      break;
+    case 'timeline':
+      filteredNodes = graphNodes.filter((n) => n.type === 'commit' || n.type === 'pr');
+      break;
+    case 'filter':
+      filteredNodes = graphNodes.filter((n) => n.type === 'drift' || n.type === 'func');
+      break;
+    default:
+      filteredNodes = graphNodes;
+  }
+  const nodeIds = new Set(filteredNodes.map((n) => n.id));
+  const filteredEdges = graphEdges.filter((e) => nodeIds.has(e.from) && nodeIds.has(e.to));
+  return { filteredNodes, filteredEdges };
+}
+
+const GraphSVG = ({ activeNodeId, onNodeClick, viewMode = 'graph' }: GraphSVGProps) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -22,9 +51,11 @@ const GraphSVG = ({ activeNodeId, onNodeClick }: GraphSVGProps) => {
     // Clear previous content
     svg.innerHTML = '';
 
+    const { filteredNodes, filteredEdges } = getFilteredData(viewMode);
+
     // Create defs for glow filters
     const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
-    graphNodes.forEach((n) => {
+    filteredNodes.forEach((n) => {
       const filter = document.createElementNS('http://www.w3.org/2000/svg', 'filter');
       filter.setAttribute('id', `glow_${n.id}`);
       filter.setAttribute('x', '-50%');
@@ -47,7 +78,7 @@ const GraphSVG = ({ activeNodeId, onNodeClick }: GraphSVGProps) => {
     // Find edges connected to active node
     const activeEdges = new Set<number>();
     if (activeNodeId) {
-      graphEdges.forEach((e, idx) => {
+      filteredEdges.forEach((e, idx) => {
         if (e.from === activeNodeId || e.to === activeNodeId) {
           activeEdges.add(idx);
         }
@@ -55,9 +86,9 @@ const GraphSVG = ({ activeNodeId, onNodeClick }: GraphSVGProps) => {
     }
 
     // Draw edges
-    graphEdges.forEach((e, idx) => {
-      const fromNode = graphNodes.find((n) => n.id === e.from);
-      const toNode = graphNodes.find((n) => n.id === e.to);
+    filteredEdges.forEach((e, idx) => {
+      const fromNode = filteredNodes.find((n) => n.id === e.from);
+      const toNode = filteredNodes.find((n) => n.id === e.to);
       if (!fromNode || !toNode) return;
 
       const fx = fromNode.x * W;
@@ -100,7 +131,7 @@ const GraphSVG = ({ activeNodeId, onNodeClick }: GraphSVGProps) => {
     });
 
     // Draw nodes
-    graphNodes.forEach((n) => {
+    filteredNodes.forEach((n) => {
       const px = n.x * W;
       const py = n.y * H;
       const col = nodeColors[n.type] || '#fff';
@@ -163,7 +194,7 @@ const GraphSVG = ({ activeNodeId, onNodeClick }: GraphSVGProps) => {
 
       svg.appendChild(group);
     });
-  }, [activeNodeId, onNodeClick]);
+  }, [activeNodeId, onNodeClick, viewMode]);
 
   useEffect(() => {
     drawGraph();

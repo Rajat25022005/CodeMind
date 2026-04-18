@@ -61,3 +61,24 @@
   color: var(--text);
   display: block;
 }
+
+.tlItem:hover .tlText strong {
+  color: var(--cyan);
+}
+
+.tlViewAll {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--cyan);
+  text-align: center;
+  padding: 6px 0 2px;
+  cursor: pointer;
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+  transition: opacity 0.15s;
+}
+
+.tlViewAll:hover {
+  opacity: 0.7;
+}
+

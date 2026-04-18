@@ -4,7 +4,7 @@ import './Pages.css';
 
 const filterTypes = ['All', 'Commits', 'PRs', 'Drifts', 'Releases'];
 const typeMap: Record<string, string> = { Commits: 'commit', PRs: 'pr', Drifts: 'drift', Releases: 'release' };
-const typeIcons: Record<string, string> = { commit: '●', pr: '⎇', drift: '⚠', release: '🚀' };
+const typeIcons: Record<string, string> = { commit: '●', pr: '⎇', drift: '▲', release: '◆' };
 
 /**
  * TimelinePage — Full scrollable timeline of all events.

@@ -16,6 +16,7 @@ import './GraphCanvas.css';
 const GraphCanvas = () => {
   const { selectedNodeId, setSelectedNodeId } = useApp();
   const [activeTab, setActiveTab] = useState('knowledge-graph');
+  const [viewMode, setViewMode] = useState('graph');
 
   const handleNodeClick = (id: string) => {
     setSelectedNodeId(selectedNodeId === id ? null : id);
@@ -25,8 +26,8 @@ const GraphCanvas = () => {
     <>
       <GraphTabBar activeTab={activeTab} onTabChange={setActiveTab} />
       <div className="graphArea" id="graph-canvas">
-        <GraphToolbar />
-        <GraphSVG activeNodeId={selectedNodeId} onNodeClick={handleNodeClick} />
+        <GraphToolbar activeView={viewMode} onViewChange={setViewMode} />
+        <GraphSVG activeNodeId={selectedNodeId} onNodeClick={handleNodeClick} viewMode={viewMode} />
         <GraphLegend />
         <NodeTooltip nodeId={selectedNodeId} />
         <TimelineStrip />

@@ -27,7 +27,7 @@
   font-weight: 700;
   color: var(--amber);
   display: flex;
-  gap: 7px;
+  gap: 6px;
   align-items: center;
 }
 

@@ -8,13 +8,6 @@ const typeColors: Record<string, { color: string; bg: string }> = {
   feature:  { color: 'var(--green)',  bg: 'var(--green-dim)' },
 };
 
-const typeIcons: Record<string, string> = {
-  create: '✦',
-  refactor: '⟲',
-  fix: '🔧',
-  feature: '✚',
-};
-
 /**
  * OnboardingPage — Chronological story of how a module evolved.
  */
@@ -40,15 +33,19 @@ const OnboardingPage = () => {
                     background: colors.bg,
                     borderColor: colors.color,
                     color: colors.color,
+                    fontSize: '11px',
                   }}
                 >
-                  {typeIcons[step.type]}
+                  {step.type === 'create' && '✦'}
+                  {step.type === 'refactor' && '↻'}
+                  {step.type === 'fix' && '✎'}
+                  {step.type === 'feature' && '+'}
                 </div>
                 <div className="vtlContent">
                   <div className="vtlTitle">{step.title}</div>
                   <div className="vtlDesc">{step.description}</div>
                   <div className="vtlMeta">
-                    <span>📅 {step.date}</span>
+                    <span>{step.date}</span>
                     {step.commit && (
                       <span style={{ color: 'var(--purple)' }}>{step.commit}</span>
                     )}
