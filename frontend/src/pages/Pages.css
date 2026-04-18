@@ -275,6 +275,11 @@
   background: var(--bg2);
 }
 
+.fileEntryActive {
+  background: var(--cyan-dim);
+  border-left: 2px solid var(--cyan);
+}
+
 .fileName {
   font-family: var(--font-mono);
   font-size: 11px;

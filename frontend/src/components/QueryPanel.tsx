@@ -46,6 +46,17 @@ const QueryPanel = () => {
 
   const handleClear = () => setMessages([]);
 
+  const handleExport = () => {
+    const text = messages.map(m => `[${m.role === 'user' ? 'You' : 'CodeMind'}] ${m.content.replace(/<[^>]*>/g, '')}`).join('\n\n');
+    const blob = new Blob([text], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `codemind-trail-${Date.now()}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <aside className="rightPanel" id="query-panel">
       <div className="rpHeader">
@@ -54,16 +65,29 @@ const QueryPanel = () => {
           <div className="rpSub">Multi-hop reasoning · Ollama llama3</div>
         </div>
         <div className="rpHeaderActions">
-          <button className="rpNavIcon" title="Clear chat" onClick={handleClear}>🗑</button>
-          <button className="rpNavIcon" title="Export">↗</button>
+          <button className="rpNavIcon" title="Clear chat" onClick={handleClear}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="3 6 5 6 21 6" />
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+            </svg>
+          </button>
+          <button className="rpNavIcon" title="Export chat" onClick={handleExport}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+          </button>
         </div>
       </div>
 
       <div className="rpMessages">
         {messages.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '40px 16px', color: 'var(--muted)', fontFamily: 'var(--font-mono)', fontSize: '11px' }}>
-            <div style={{ fontSize: '28px', marginBottom: '12px', opacity: 0.4 }}>💬</div>
-            Ask about any decision, function, or module
+          <div className="rpEmptyState">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.4 }}>
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
+            <span>Ask about any decision, function, or module</span>
           </div>
         ) : (
           messages.map((msg) => <MessageBubble key={msg.id} message={msg} />)
@@ -71,7 +95,7 @@ const QueryPanel = () => {
         {isThinking && (
           <div className="msg msgAi" style={{ animation: 'appear 0.25s ease forwards' }}>
             <div className="msgBubble" style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--muted)' }}>
-              ● Reasoning<span className="streamCursor" />
+              Reasoning<span className="streamCursor" />
             </div>
           </div>
         )}

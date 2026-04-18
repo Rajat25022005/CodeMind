@@ -177,13 +177,13 @@ export const mockStats: StatusStats = {
 /* ── Sidebar Items ── */
 export const sidebarItems: SidebarItem[] = [
   { icon: '⬡', title: 'Graph', id: 'graph', path: '/' },
-  { icon: '💬', title: 'Query', id: 'query', path: '/query' },
-  { icon: '📅', title: 'Timeline', id: 'timeline', path: '/timeline' },
+  { icon: '◈', title: 'Query', id: 'query', path: '/query' },
+  { icon: '◷', title: 'Timeline', id: 'timeline', path: '/timeline' },
 ];
 
 export const sidebarSecondary: SidebarItem[] = [
-  { icon: '📁', title: 'Files', id: 'files', path: '/files' },
-  { icon: '🔀', title: 'Commits', id: 'commits', path: '/commits' },
+  { icon: '⊟', title: 'Files', id: 'files', path: '/files' },
+  { icon: '⎇', title: 'Commits', id: 'commits', path: '/commits' },
 ];
 
 /* ── Tab Definitions ── */
@@ -196,7 +196,7 @@ export const graphTabs: Tab[] = [
 
 /* ── Node Tooltip Demo Data ── */
 export const activeNodeTooltip = {
-  icon: '⬡',
+  icon: '◇',
   title: 'auth/middleware.py',
   subtitle: 'Module · 847 lines · Python',
   rows: [
@@ -205,7 +205,7 @@ export const activeNodeTooltip = {
     { label: 'Dependents', value: '7 modules' },
     { label: 'Key event', value: 'v2 rewrite', highlight: true },
   ],
-  driftTag: '⚠ Intent drift detected',
+  driftTag: 'Intent drift detected',
 };
 
 /* ── Node tooltip data for all nodes ── */
@@ -218,7 +218,7 @@ export const nodeTooltipData: Record<string, {
 }> = {
   auth_mid: activeNodeTooltip,
   jwt: {
-    icon: '⚠',
+    icon: '▲',
     title: 'auth/jwt.py',
     subtitle: 'Drift · 312 lines · Python',
     rows: [
@@ -227,10 +227,10 @@ export const nodeTooltipData: Record<string, {
       { label: 'Dependents', value: '3 modules' },
       { label: 'Status', value: 'Drift detected', highlight: true },
     ],
-    driftTag: '⚠ Behavior drift — concurrent refresh unguarded',
+    driftTag: 'Behavior drift — concurrent refresh unguarded',
   },
   session: {
-    icon: '⬡',
+    icon: '◇',
     title: 'auth/session.py',
     subtitle: 'Module · 234 lines · Python',
     rows: [
@@ -252,7 +252,7 @@ export const nodeTooltipData: Record<string, {
     ],
   },
   db_conn: {
-    icon: '⬡',
+    icon: '◇',
     title: 'db/connection.py',
     subtitle: 'Module · 189 lines · Python',
     rows: [
@@ -261,7 +261,7 @@ export const nodeTooltipData: Record<string, {
       { label: 'Dependents', value: '5 modules' },
       { label: 'Key event', value: 'Pool size config', highlight: true },
     ],
-    driftTag: '⚠ Constraint violation — hardcoded pool size',
+    driftTag: 'Constraint violation — hardcoded pool size',
   },
   rate_lim: {
     icon: '⨍',
